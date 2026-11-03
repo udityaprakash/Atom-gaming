@@ -33,7 +33,7 @@ class DashboardScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'PLAYZONE CONTROL',
+                  'ATOM',
                   style: GoogleFonts.orbitron(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

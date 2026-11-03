@@ -16,8 +16,8 @@ class AlarmService {
       FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
-  static const String channelId = 'playzone_session_alerts';
-  static const String channelName = 'Playzone Session Alerts';
+  static const String channelId = 'atom_session_alerts';
+  static const String channelName = 'atom Session Alerts';
   static const String channelDescription =
       'Alarms and notifications when gaming room sessions end';
 

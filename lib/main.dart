@@ -28,7 +28,7 @@ void main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const PlayzoneControlApp(),
+      child: const AtomApp(),
     ),
   );
 }
@@ -75,8 +75,8 @@ Future<void> _seedInitialRoomsIfEmpty(ProviderContainer container) async {
   }
 }
 
-class PlayzoneControlApp extends StatelessWidget {
-  const PlayzoneControlApp({super.key});
+class AtomApp extends StatelessWidget {
+  const AtomApp({super.key});
 
   @override
   Widget build(BuildContext context) {

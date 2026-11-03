@@ -1,6 +1,6 @@
-# PLAYZONE CONTROL - Development Progress & TODO Tracker
+# atom - Development Progress & TODO Tracker
 
-> **Project:** PLAYZONE CONTROL (Version 1.1)  
+> **Project:** atom (Version 1.1)  
 > **Platform:** Android (Flutter / Dart)  
 > **Architecture:** Local-first Offline Architecture (Riverpod + Drift SQLite + GoRouter)  
 > **Payment Mode:** Cash Only (Digital / UPI marked as *Coming Soon*)  
@@ -12,7 +12,7 @@
 ## Progress Overview
 - [x] **Phase 1: Project Setup, Database Schema & Core Room/Session Management** (100%)
 - [x] **Phase 2: Advanced Session Controls, Alarms & Crash Recovery** (100%)
-- [ ] **Phase 3: Billing Engine, Cash Settlement & Receipts** (0%)
+- [x] **Phase 3: Billing Engine, Cash Settlement & Receipts** (100%)
 - [ ] **Phase 4: Customer Management, Session History & Revenue Analytics** (0%)
 - [ ] **Phase 5: Data Backup/Export, Security, Maintenance & Settings** (0%)
 - [ ] **Phase 6: Comprehensive Testing, Hardening & Release Polish** (0%)
@@ -186,49 +186,49 @@
 ### Phase 3: Billing Engine, Cash Settlement & Receipts
 
 #### 3.1 Billing Engine
-- [ ] Billing calculation engine supporting:
+- [x] Billing calculation engine supporting:
   - Per-minute calculation (default: rate/60 per minute)
   - 15-minute / 30-minute block rounding
   - Minimum session charge threshold
   - Grace period configuration
   - Overtime calculation
-- [ ] Multi-segment bill aggregator (combining multiple room rates during transfers)
+- [x] Multi-segment bill aggregator (combining multiple room rates during transfers)
 
 #### 3.2 Session Completion & Settlement Screen
-- [ ] Detailed final session review:
+- [x] Detailed final session review:
   - Total elapsed time, breakdown per room segment
   - Extension log & paused intervals
   - Hourly rate snapshot applied
   - Gross amount, discounts/adjustments, final payable total
-- [ ] Cash Payment Actions:
+- [x] Cash Payment Actions:
   - "Mark as PAID": Records cash collected amount equal to payable total and current timestamp
   - "Mark as UNPAID": Records amount collected as ₹0, marks payment status as `UNPAID`, and logs full balance as outstanding
 
 #### 3.3 Outstanding Balance & Cash Collection Later
-- [ ] Unpaid sessions listing in Sessions screen
-- [ ] "Collect Cash" workflow for previously unpaid sessions:
+- [x] Unpaid sessions listing in Sessions screen tab view
+- [x] "Collect Cash" workflow for previously unpaid sessions:
   - Record actual collection timestamp (`paid_at`)
   - Update payment record to `PAID` without modifying the original session completion timestamp
   - Automatically update daily cash drawer and outstanding balance
 
 #### 3.4 Future Payment Methods ("Coming Soon" UI)
-- [ ] Render "Other Payment Methods – Coming Soon" section in billing screen
-- [ ] Non-clickable / informational placeholders for:
+- [x] Render "Other Payment Methods – Coming Soon" section in billing screen
+- [x] Non-clickable / informational placeholders for:
   - UPI (QR / VPA) – Coming Soon
   - Credit / Debit Card – Coming Soon
   - Digital Wallets – Coming Soon
   - Net Banking – Coming Soon
-- [ ] Architecture isolation ensuring cash ledger remains pure and immutable
+- [x] Architecture isolation ensuring cash ledger remains pure and immutable
 
 #### 3.5 Digital Receipt & Sharing
-- [ ] Formatted gaming receipt card:
+- [x] Formatted gaming receipt card:
   - Gaming Zone Name & Logo
   - Session ID & Date/Time
   - Customer Name & Contact (if provided)
   - Room & Equipment details
   - Time breakdown & billing calculation
   - Payment status (`PAID [CASH]` / `UNPAID`)
-- [ ] Share receipt as image or text via `share_plus`
+- [x] Share receipt as text via `share_plus` (`ReceiptService.shareReceipt`)
 
 ---
 

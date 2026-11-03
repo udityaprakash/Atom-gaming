@@ -146,7 +146,7 @@ class _NotificationSettingsScreenState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'To ensure alarms trigger on exact time while the device is locked, exempt PLAYZONE CONTROL from aggressive battery optimization in your device system settings.',
+                        'To ensure alarms trigger on exact time while the device is locked, exempt atom from aggressive battery optimization in your device system settings.',
                         style: GoogleFonts.rajdhani(
                           fontSize: 12,
                           color: AppColors.textSecondary,

@@ -1,7 +1,7 @@
 class AppConstants {
   AppConstants._();
 
-  static const String appName = 'PLAYZONE CONTROL';
+  static const String appName = 'atom';
   static const String appVersion = '1.1.0';
   static const String currencySymbol = '₹';
 

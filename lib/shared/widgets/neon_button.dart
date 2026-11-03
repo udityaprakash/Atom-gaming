@@ -10,6 +10,7 @@ class NeonButton extends StatelessWidget {
   final bool isOutlined;
   final double height;
   final double fontSize;
+  final EdgeInsetsGeometry? padding;
 
   const NeonButton({
     super.key,
@@ -20,10 +21,13 @@ class NeonButton extends StatelessWidget {
     this.isOutlined = false,
     this.height = 42,
     this.fontSize = 13,
+    this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectivePadding = padding ?? EdgeInsets.symmetric(horizontal: height <= 36 ? 8 : 12);
+
     if (isOutlined) {
       return OutlinedButton(
         onPressed: onPressed,
@@ -32,7 +36,7 @@ class NeonButton extends StatelessWidget {
           side: BorderSide(color: color.withValues(alpha: 0.8), width: 1.2),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           minimumSize: Size(0, height),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: effectivePadding,
         ),
         child: _buildChild(),
       );
@@ -47,7 +51,7 @@ class NeonButton extends StatelessWidget {
         shadowColor: color.withValues(alpha: 0.5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         minimumSize: Size(0, height),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: effectivePadding,
       ),
       child: _buildChild(),
     );
@@ -59,15 +63,19 @@ class NeonButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: fontSize + 3),
-          const SizedBox(width: 6),
+          Icon(icon, size: fontSize + 2),
+          const SizedBox(width: 4),
         ],
-        Text(
-          label,
-          style: GoogleFonts.rajdhani(
-            fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.6,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.rajdhani(
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
           ),
         ),
       ],

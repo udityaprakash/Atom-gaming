@@ -19,7 +19,7 @@ class TransferRoomDialog extends ConsumerStatefulWidget {
 }
 
 class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
-  Room? _selectedDestinationRoom;
+  String? _selectedDestinationRoomId;
   bool _isSubmitting = false;
 
   @override
@@ -121,7 +121,7 @@ class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
 
               availableRoomsAsync.when(
                 data: (availableRooms) {
-                  // Filter out current room if it was somehow marked available
+                  // Filter out current room
                   final candidates = availableRooms.where((r) => r.id != currentRoom.id).toList();
 
                   if (candidates.isEmpty) {
@@ -149,24 +149,28 @@ class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
                     );
                   }
 
-                  return DropdownButtonFormField<Room>(
-                    initialValue: _selectedDestinationRoom,
+                  // Ensure selected room id exists in current candidates list
+                  final isValidSelection = candidates.any((r) => r.id == _selectedDestinationRoomId);
+                  final effectiveSelectedId = isValidSelection ? _selectedDestinationRoomId : null;
+
+                  return DropdownButtonFormField<String>(
+                    initialValue: effectiveSelectedId,
                     decoration: const InputDecoration(
                       labelText: 'Available Room *',
                       prefixIcon: Icon(Icons.meeting_room, size: 18),
                     ),
                     dropdownColor: AppColors.surfaceElevated,
                     items: candidates.map((room) {
-                      return DropdownMenuItem(
-                        value: room,
+                      return DropdownMenuItem<String>(
+                        value: room.id,
                         child: Text(
                           '${room.roomName} (${room.equipmentType}) - ${CurrencyFormatter.format(room.hourlyRate)}/hr',
                           style: GoogleFonts.rajdhani(fontWeight: FontWeight.w600),
                         ),
                       );
                     }).toList(),
-                    onChanged: (room) {
-                      setState(() => _selectedDestinationRoom = room);
+                    onChanged: (roomId) {
+                      setState(() => _selectedDestinationRoomId = roomId);
                     },
                   );
                 },
@@ -174,51 +178,63 @@ class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
                 error: (err, _) => Text('Error: $err'),
               ),
 
-              if (_selectedDestinationRoom != null) ...[
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Rate snapshot preview for selected room
+              availableRoomsAsync.maybeWhen(
+                data: (availableRooms) {
+                  final selectedRoom = availableRooms
+                      .where((r) => r.id == _selectedDestinationRoomId && r.id != currentRoom.id)
+                      .firstOrNull;
+
+                  if (selectedRoom == null) return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 14.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'NEW RATE SNAPSHOT',
-                            style: GoogleFonts.rajdhani(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.secondary,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'NEW RATE SNAPSHOT',
+                                style: GoogleFonts.rajdhani(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                              Text(
+                                '${CurrencyFormatter.format(selectedRoom.hourlyRate)}/hr',
+                                style: GoogleFonts.orbitron(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 4),
                           Text(
-                            '${CurrencyFormatter.format(_selectedDestinationRoom!.hourlyRate)}/hr',
-                            style: GoogleFonts.orbitron(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.secondary,
+                            'The previous segment on ${currentRoom.roomName} will be closed at its original rate. Time in ${selectedRoom.roomName} will accrue at its new rate.',
+                            style: GoogleFonts.rajdhani(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'The previous segment on ${currentRoom.roomName} will be closed at its original rate. Time in ${_selectedDestinationRoom!.roomName} will accrue at its new rate.',
-                        style: GoogleFonts.rajdhani(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  );
+                },
+                orElse: () => const SizedBox.shrink(),
+              ),
             ],
           ),
         ),
@@ -238,21 +254,27 @@ class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
           color: AppColors.secondary,
           height: 38,
           fontSize: 12,
-          onPressed: (_isSubmitting || _selectedDestinationRoom == null) ? null : _handleTransfer,
+          onPressed: (_isSubmitting || _selectedDestinationRoomId == null)
+              ? null
+              : () => _handleTransfer(availableRoomsAsync.asData?.value),
         ),
       ],
     );
   }
 
-  Future<void> _handleTransfer() async {
-    if (_selectedDestinationRoom == null) return;
+  Future<void> _handleTransfer(List<Room>? availableRooms) async {
+    final destId = _selectedDestinationRoomId;
+    if (destId == null) return;
+
+    final destRoom = availableRooms?.where((r) => r.id == destId).firstOrNull;
+    final destName = destRoom?.roomName ?? 'New Room';
 
     setState(() => _isSubmitting = true);
     try {
       final repo = ref.read(sessionRepositoryProvider);
       await repo.transferRoom(
         sessionId: widget.activeSession.session.id,
-        destinationRoomId: _selectedDestinationRoom!.id,
+        destinationRoomId: destId,
       );
 
       if (mounted) {
@@ -260,7 +282,7 @@ class _TransferRoomDialogState extends ConsumerState<TransferRoomDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Transferred to ${_selectedDestinationRoom!.roomName} successfully!',
+              'Transferred to $destName successfully!',
             ),
             backgroundColor: AppColors.surfaceElevated,
           ),

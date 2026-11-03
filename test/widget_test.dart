@@ -7,7 +7,7 @@ import 'package:atom/features/sessions/providers/session_provider.dart';
 import 'package:atom/main.dart';
 
 void main() {
-  testWidgets('PlayzoneControlApp smoke test', (WidgetTester tester) async {
+  testWidgets('AtomApp smoke test', (WidgetTester tester) async {
     final testDb = AppDatabase(NativeDatabase.memory());
 
     await tester.pumpWidget(
@@ -16,12 +16,12 @@ void main() {
           appDatabaseProvider.overrideWithValue(testDb),
           liveTimerTickerProvider.overrideWith((ref) => Stream.value(DateTime.now())),
         ],
-        child: const PlayzoneControlApp(),
+        child: const AtomApp(),
       ),
     );
 
     await tester.pump();
-    expect(find.byType(PlayzoneControlApp), findsOneWidget);
+    expect(find.byType(AtomApp), findsOneWidget);
 
     await testDb.close();
   });

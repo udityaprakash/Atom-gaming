@@ -3,6 +3,8 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/services/alarm_service.dart';
+import '../../../core/services/billing_engine.dart';
+import '../../../core/services/receipt_service.dart';
 
 class ActiveRoomSession {
   final Session session;
@@ -15,6 +17,24 @@ class ActiveRoomSession {
     required this.segment,
     required this.room,
     this.customer,
+  });
+}
+
+class UnpaidSessionItem {
+  final Session session;
+  final Customer? customer;
+  final Room room;
+  final Payment? payment;
+  final DateTime endedAt;
+  final double amountDue;
+
+  const UnpaidSessionItem({
+    required this.session,
+    this.customer,
+    required this.room,
+    this.payment,
+    required this.endedAt,
+    required this.amountDue,
   });
 }
 
@@ -494,55 +514,125 @@ class SessionRepository {
     }
   }
 
-  Future<void> endSession({
+  /// Calculate live billing preview for an ongoing session
+  Future<SessionBillingBreakdown> calculateLiveSessionBreakdown(
+    String sessionId, {
+    double discount = 0.0,
+  }) async {
+    final now = DateTime.now();
+    final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+    if (session == null) throw Exception('Session not found: $sessionId');
+
+    final segments = await (_db.select(_db.sessionSegments)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.asc)]))
+        .get();
+
+    final segmentBillingList = <SegmentBillingDetails>[];
+
+    for (final segment in segments) {
+      final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+      final segmentStart = segment.startedAt;
+      final segmentEnd = segment.endedAt ?? now;
+
+      final segDetails = BillingEngine.buildSegmentDetails(
+        roomId: segment.roomId,
+        roomName: room?.roomName ?? 'Gaming Room',
+        equipmentType: room?.equipmentType ?? 'Console',
+        startedAt: segmentStart,
+        endedAt: segmentEnd,
+        hourlyRateSnapshot: segment.hourlyRateSnapshot,
+        policy: session.billingPolicy,
+      );
+
+      segmentBillingList.add(segDetails);
+    }
+
+    return BillingEngine.calculateSessionBreakdown(
+      segments: segmentBillingList,
+      discount: discount,
+      policy: session.billingPolicy,
+    );
+  }
+
+  /// Ends session with full billing calculation, multi-segment aggregation, cash payment recording,
+  /// and returns [SessionReceiptData] for digital receipt generation.
+  Future<SessionReceiptData> endSessionWithBilling({
     required String sessionId,
     required String paymentStatus, // PAID or UNPAID
+    double discount = 0.0,
+    String? notes,
   }) async {
+    SessionReceiptData? receiptData;
+
     await _db.transaction(() async {
       final now = DateTime.now();
 
       // 1. Fetch Session
       final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
-      if (session == null) {
-        throw Exception('Session not found: $sessionId');
-      }
+      if (session == null) throw Exception('Session not found: $sessionId');
 
-      // 2. Fetch all segments for this session
+      // 2. Fetch Customer
+      final customer = session.customerId != null
+          ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
+          : null;
+
+      // 3. Fetch all segments
       final segments = await (_db.select(_db.sessionSegments)
-            ..where((t) => t.sessionId.equals(sessionId)))
+            ..where((t) => t.sessionId.equals(sessionId))
+            ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.asc)]))
           .get();
 
-      double calculatedTotalAmount = 0.0;
+      final segmentBillingList = <SegmentBillingDetails>[];
       int calculatedTotalDurationSeconds = 0;
       String? activeRoomId;
 
       for (final segment in segments) {
+        final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+        final isUnclosed = segment.endedAt == null;
         final segmentStart = segment.startedAt;
-        final segmentEnd = segment.endedAt ?? now;
-        final segmentDurationSecs = segmentEnd.difference(segmentStart).inSeconds;
-        calculatedTotalDurationSeconds += segmentDurationSecs;
+        final segmentEnd = isUnclosed ? now : segment.endedAt!;
+        final segmentDuration = segmentEnd.difference(segmentStart);
+        calculatedTotalDurationSeconds += segmentDuration.inSeconds;
 
-        // Calculate amount for segment (Per-minute calculation: Rate/60 per minute)
-        final segmentMinutes = segmentDurationSecs / 60.0;
-        final segmentAmount = (segmentMinutes / 60.0) * segment.hourlyRateSnapshot;
-        calculatedTotalAmount += segmentAmount;
+        final segDetails = BillingEngine.buildSegmentDetails(
+          roomId: segment.roomId,
+          roomName: room?.roomName ?? 'Gaming Room',
+          equipmentType: room?.equipmentType ?? 'Console',
+          startedAt: segmentStart,
+          endedAt: segmentEnd,
+          hourlyRateSnapshot: segment.hourlyRateSnapshot,
+          policy: session.billingPolicy,
+        );
 
-        // If this was the active unclosed segment, close it now
-        if (segment.endedAt == null) {
+        segmentBillingList.add(segDetails);
+
+        if (isUnclosed) {
           activeRoomId = segment.roomId;
           await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(segment.id))).write(
             SessionSegmentsCompanion(
               endedAt: Value(now),
-              amount: Value(segmentAmount),
+              amount: Value(segDetails.amount),
             ),
           );
         }
       }
 
-      // Round to nearest integer for billing (Indian Rupee practice)
-      final finalAmount = calculatedTotalAmount.roundToDouble();
+      final breakdown = BillingEngine.calculateSessionBreakdown(
+        segments: segmentBillingList,
+        discount: discount,
+        policy: session.billingPolicy,
+      );
 
-      // 3. Update Session
+      final finalAmount = breakdown.finalAmount;
+
+      // Fetch extensions
+      final extensions = await (_db.select(_db.sessionExtensions)
+            ..where((t) => t.sessionId.equals(sessionId)))
+          .get();
+      final totalExtensionMins = extensions.fold<int>(0, (sum, ext) => sum + ext.extensionMinutes);
+
+      // 4. Update Session
       await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
         SessionsCompanion(
           status: const Value(AppConstants.sessionCompleted),
@@ -553,7 +643,7 @@ class SessionRepository {
         ),
       );
 
-      // 4. Create Payment Record (CASH ONLY)
+      // 5. Create Payment Record (CASH ONLY)
       final isPaid = paymentStatus == AppConstants.paymentPaid;
       await _db.into(_db.payments).insert(
             PaymentsCompanion(
@@ -569,9 +659,10 @@ class SessionRepository {
             ),
           );
 
-      // 5. Restore Room to Available
+      // 6. Free Room -> AVAILABLE
       if (activeRoomId != null) {
-        await (_db.update(_db.rooms)..where((t) => t.id.equals(activeRoomId!))).write(
+        final roomIdToFree = activeRoomId;
+        await (_db.update(_db.rooms)..where((t) => t.id.equals(roomIdToFree))).write(
           RoomsCompanion(
             status: const Value(AppConstants.statusAvailable),
             updatedAt: Value(now),
@@ -579,22 +670,223 @@ class SessionRepository {
         );
       }
 
-      // 6. Log Audit Events
+      // 7. Log Audit Events
       await _db.into(_db.sessionEvents).insert(
             SessionEventsCompanion(
               id: Value(_uuid.v4()),
               sessionId: Value(sessionId),
               eventType: const Value('ended'),
               eventTimestamp: Value(now),
-              newValue: Value('Total: ₹$finalAmount | Payment: $paymentStatus'),
+              newValue: Value('Total: ₹$finalAmount | Subtotal: ₹${breakdown.grossAmount} | Discount: ₹$discount | Status: $paymentStatus (CASH)'),
+              notes: Value(notes),
             ),
           );
+
+      receiptData = SessionReceiptData(
+        sessionId: sessionId,
+        customerName: customer?.name,
+        customerPhone: customer?.phone,
+        startedAt: session.startedAt,
+        endedAt: now,
+        totalDuration: Duration(seconds: calculatedTotalDurationSeconds),
+        segments: segmentBillingList,
+        extensionCount: extensions.length,
+        totalExtensionMinutes: totalExtensionMins,
+        grossAmount: breakdown.grossAmount,
+        discount: discount,
+        finalAmount: finalAmount,
+        paymentStatus: paymentStatus,
+        paymentMethod: AppConstants.methodCash,
+        paidAt: isPaid ? now : null,
+        notes: notes,
+      );
     });
 
     // Cancel OS alert on session completion
     if (_alarmService != null) {
       await _alarmService.cancelSessionAlert(sessionId);
     }
+
+    return receiptData!;
+  }
+
+  Future<void> endSession({
+    required String sessionId,
+    required String paymentStatus, // PAID or UNPAID
+  }) async {
+    await endSessionWithBilling(
+      sessionId: sessionId,
+      paymentStatus: paymentStatus,
+    );
+  }
+
+  /// Collect outstanding cash for an unpaid session at a later time.
+  /// Preserves the historical session start/end timestamps and records the actual collection timestamp.
+  Future<void> collectOutstandingCash({
+    required String sessionId,
+    double? amountCollected,
+  }) async {
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+
+      if (session.paymentStatus == AppConstants.paymentPaid) {
+        throw Exception('Session $sessionId is already marked as PAID');
+      }
+
+      final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+      final collected = amountCollected ?? session.totalAmount;
+
+      // Update Session payment status to PAID
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        const SessionsCompanion(
+          paymentStatus: Value(AppConstants.paymentPaid),
+        ),
+      );
+
+      // Update Payment record with actual cash collection timestamp
+      if (payment != null) {
+        await (_db.update(_db.payments)..where((t) => t.id.equals(payment.id))).write(
+          PaymentsCompanion(
+            amountCollected: Value(collected),
+            paymentStatus: const Value(AppConstants.paymentPaid),
+            paidAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+      } else {
+        await _db.into(_db.payments).insert(
+          PaymentsCompanion(
+            id: Value(_uuid.v4()),
+            sessionId: Value(sessionId),
+            amountDue: Value(session.totalAmount),
+            amountCollected: Value(collected),
+            paymentMethod: const Value(AppConstants.methodCash),
+            paymentStatus: const Value(AppConstants.paymentPaid),
+            paidAt: Value(now),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      // Log Audit Event
+      await _db.into(_db.sessionEvents).insert(
+        SessionEventsCompanion(
+          id: Value(_uuid.v4()),
+          sessionId: Value(sessionId),
+          eventType: const Value('unpaid_settled'),
+          eventTimestamp: Value(now),
+          oldValue: Value('UNPAID (Due: ₹${session.totalAmount})'),
+          newValue: Value('PAID IN CASH: ₹$collected'),
+          notes: const Value('Cash debt collected at desk'),
+        ),
+      );
+    });
+  }
+
+  /// Rebuilds complete [SessionReceiptData] for any completed session
+  Future<SessionReceiptData> getSessionReceiptData(String sessionId) async {
+    final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+    if (session == null) throw Exception('Session not found: $sessionId');
+
+    final customer = session.customerId != null
+        ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
+        : null;
+
+    final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+
+    final segments = await (_db.select(_db.sessionSegments)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.asc)]))
+        .get();
+
+    final segmentBillingList = <SegmentBillingDetails>[];
+    for (final segment in segments) {
+      final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+      final segEnd = segment.endedAt ?? session.endedAt ?? DateTime.now();
+      segmentBillingList.add(
+        BillingEngine.buildSegmentDetails(
+          roomId: segment.roomId,
+          roomName: room?.roomName ?? 'Gaming Room',
+          equipmentType: room?.equipmentType ?? 'Console',
+          startedAt: segment.startedAt,
+          endedAt: segEnd,
+          hourlyRateSnapshot: segment.hourlyRateSnapshot,
+          policy: session.billingPolicy,
+        ),
+      );
+    }
+
+    final extensions = await (_db.select(_db.sessionExtensions)..where((t) => t.sessionId.equals(sessionId))).get();
+    final totalExtensionMins = extensions.fold<int>(0, (sum, ext) => sum + ext.extensionMinutes);
+
+    final gross = segmentBillingList.fold<double>(0.0, (sum, seg) => sum + seg.amount);
+    final discount = (gross - session.totalAmount) > 0 ? (gross - session.totalAmount) : 0.0;
+
+    return SessionReceiptData(
+      sessionId: session.id,
+      customerName: customer?.name,
+      customerPhone: customer?.phone,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt ?? DateTime.now(),
+      totalDuration: Duration(seconds: session.totalDurationSeconds),
+      segments: segmentBillingList,
+      extensionCount: extensions.length,
+      totalExtensionMinutes: totalExtensionMins,
+      grossAmount: gross,
+      discount: discount,
+      finalAmount: session.totalAmount,
+      paymentStatus: session.paymentStatus,
+      paymentMethod: payment?.paymentMethod ?? AppConstants.methodCash,
+      paidAt: payment?.paidAt,
+    );
+  }
+
+  /// Watch all completed sessions with outstanding UNPAID dues
+  Stream<List<UnpaidSessionItem>> watchUnpaidSessions() {
+    final query = _db.select(_db.sessions).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.sessions.customerId)),
+    ])..where(_db.sessions.status.equals(AppConstants.sessionCompleted) &
+              _db.sessions.paymentStatus.equals(AppConstants.paymentUnpaid))
+      ..orderBy([OrderingTerm(expression: _db.sessions.endedAt, mode: OrderingMode.desc)]);
+
+    return query.watch().asyncMap((rows) async {
+      final list = <UnpaidSessionItem>[];
+      for (final row in rows) {
+        final session = row.readTable(_db.sessions);
+        final customer = row.readTableOrNull(_db.customers);
+
+        final lastSegment = await (_db.select(_db.sessionSegments)
+              ..where((t) => t.sessionId.equals(session.id))
+              ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.desc)])
+              ..limit(1))
+            .getSingleOrNull();
+
+        Room? room;
+        if (lastSegment != null) {
+          room = await (_db.select(_db.rooms)..where((t) => t.id.equals(lastSegment.roomId))).getSingleOrNull();
+        }
+
+        final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(session.id))).getSingleOrNull();
+
+        if (room != null) {
+          list.add(
+            UnpaidSessionItem(
+              session: session,
+              customer: customer,
+              room: room,
+              payment: payment,
+              endedAt: session.endedAt ?? session.scheduledEndAt,
+              amountDue: session.totalAmount,
+            ),
+          );
+        }
+      }
+      return list;
+    });
   }
 
   Future<List<SessionExtension>> getSessionExtensions(String sessionId) {

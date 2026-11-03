@@ -28,6 +28,11 @@ final dashboardStatsStreamProvider = StreamProvider<DashboardStats>((ref) {
   return repo.watchDashboardStats();
 });
 
+final unpaidSessionsStreamProvider = StreamProvider<List<UnpaidSessionItem>>((ref) {
+  final repo = ref.watch(sessionRepositoryProvider);
+  return repo.watchUnpaidSessions();
+});
+
 /// A 1-second interval ticker that updates all live UI timers
 final liveTimerTickerProvider = StreamProvider<DateTime>((ref) {
   return Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now());
