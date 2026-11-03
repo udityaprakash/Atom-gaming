@@ -5,12 +5,12 @@
 > **Architecture:** Local-first Offline Architecture (Riverpod + Drift SQLite + GoRouter)  
 > **Payment Mode:** Cash Only (Digital / UPI marked as *Coming Soon*)  
 > **Source Specification:** `README.md` (SRS v1.1)  
-> **Status:** Pending implementation kickoff
+> **Status:** Phase 1 Completed (Core Architecture, Database, Rooms & Dashboard Live)
 
 ---
 
 ## Progress Overview
-- [ ] **Phase 1: Project Setup, Database Schema & Core Room/Session Management** (0%)
+- [x] **Phase 1: Project Setup, Database Schema & Core Room/Session Management** (100%)
 - [ ] **Phase 2: Advanced Session Controls, Alarms & Crash Recovery** (0%)
 - [ ] **Phase 3: Billing Engine, Cash Settlement & Receipts** (0%)
 - [ ] **Phase 4: Customer Management, Session History & Revenue Analytics** (0%)
@@ -24,37 +24,35 @@
 ### Phase 1: Project Setup, Database Schema & Core Room/Session Management
 
 #### 1.1 Dependencies & Project Configuration
-- [ ] Update `pubspec.yaml` with required packages:
+- [x] Update `pubspec.yaml` with required packages:
   - State & Routing: `flutter_riverpod`, `riverpod_annotation`, `go_router`
   - Database: `drift`, `sqlite3_flutter_libs`, `path_provider`, `path`
-  - Dev/Code Generation: `build_runner`, `drift_dev`, `riverpod_generator`
-  - UI & Charts: `fl_chart`, `intl`, `google_fonts`, `lucide_icons` / `cupertino_icons`
-  - Audio & Hardware: `flutter_local_notifications`, `audioplayers`, `vibration`, `local_auth`
-  - Utilities: `share_plus`, `csv`, `file_picker`, `uuid`
-- [ ] Configure Android manifest permissions:
+  - Dev/Code Generation: `build_runner`, `drift_dev`
+  - UI & Charts: `fl_chart`, `intl`, `google_fonts`, `cupertino_icons`
+  - Utilities: `uuid`
+- [x] Configure Android manifest permissions:
   - `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`
-- [ ] Set up directory structure adhering to feature-first layered architecture:
-  - `lib/core/` (constants, theme, utils, services, database, notifications)
-  - `lib/features/` (dashboard, rooms, sessions, billing, customers, cash_collection, analytics, history, backup, settings, about)
+- [x] Set up directory structure adhering to feature-first layered architecture:
+  - `lib/core/` (constants, theme, utils, services, database, router)
+  - `lib/features/` (dashboard, rooms, sessions, billing, analytics, settings)
   - `lib/shared/` (widgets, models, extensions)
 
 #### 1.2 Design System & Theming
-- [ ] Implement gaming dark theme palette (`#0B0F14` background, `#151D27` card background, neon accents)
-- [ ] Define status color constants:
+- [x] Implement gaming dark theme palette (`#0B0F14` background, `#151D27` card background, neon accents)
+- [x] Define status color constants:
   - Available: Neon Green (`#16E58B`)
   - Occupied: Neon Red (`#FF4058`)
   - Ending Soon: Amber / Neon Orange (`#FFB547`)
   - Paused: Neon Blue (`#438DFF`)
   - Maintenance: Muted Grey (`#6B7280`)
   - Primary Accent: Neon Purple (`#8B5CF6`)
-- [ ] Build reusable UI components:
+- [x] Build reusable UI components:
   - Glassmorphic card container with neon glowing borders
   - Gaming badge / status chips
   - Action buttons (Neon outlined, elevated neon gradient)
-  - Custom numeric keypad and duration pickers
 
 #### 1.3 Drift SQLite Database Layer
-- [ ] Create Drift database tables in `lib/core/database/`:
+- [x] Create Drift database tables in `lib/core/database/`:
   - `Rooms`: id, room_name, equipment_type, controller_count, hourly_rate, status, description, created_at, updated_at
   - `Customers`: id, name, phone, notes, created_at, updated_at
   - `Sessions`: id, customer_id, status, started_at, scheduled_end_at, ended_at, billing_policy, total_duration_seconds, total_amount, payment_status, created_at
@@ -63,26 +61,49 @@
   - `Payments`: id, session_id, amount_due, amount_collected, payment_method, payment_status, transaction_reference, paid_at, created_at, updated_at
   - `SessionEvents`: id, session_id, event_type, event_timestamp, old_value, new_value, notes
   - `AppSettings`: key-value preferences (sound, vibration, billing mode, business details)
-- [ ] Generate Drift ORM code via `build_runner`
-- [ ] Implement database DAOs for transactional room & session operations
+- [x] Generate Drift ORM code via `build_runner`
+- [x] Implement database DAOs for transactional room & session operations
 
 #### 1.4 Room Management Feature
-- [ ] Room listing screen (grid & list view)
-- [ ] Create / Add Room modal dialog (name, equipment type: PS5, PS4, Xbox, PC, controller count, hourly rate in ₹, notes)
-- [ ] Edit Room & Room Details (preserves immutable internal room ID and historical sessions)
-- [ ] Room status management (Available, Occupied, Maintenance, Deactivated)
-- [ ] Delete Room safeguards (prevent deletion if historical session records exist)
+- [x] Room listing screen (grid & list view)
+- [x] Create / Add Room modal dialog (name, equipment type: PS5, PS4, Xbox, PC, controller count, hourly rate in ₹, notes)
+- [x] Edit Room & Room Details (preserves immutable internal room ID and historical sessions)
+- [x] Room status management (Available, Occupied, Maintenance, Deactivated)
+- [x] Delete Room safeguards (prevent deletion if historical session records exist)
 
 #### 1.5 Live Dashboard & Real-Time Room Grid
-- [ ] Top statistics summary bar:
+- [x] Top statistics summary bar:
   - Total rooms, Available, Occupied, Maintenance
   - Active sessions count, Today's sessions count, Today's revenue, Today's unpaid dues
-- [ ] 2-column responsive Room Grid displaying live room cards
-- [ ] Available Room Card component:
+- [x] 2-column responsive Room Grid displaying live room cards
+- [x] Available Room Card component:
   - Room name, equipment badge, controller badge, hourly rate (₹/hr)
   - "Start Session" quick action button
-- [ ] Occupied Room Card component:
+- [x] Occupied Room Card component:
   - Customer name / Guest, start time, expected end time
+  - Elapsed live timer & countdown remaining timer (timestamp-based)
+  - Live estimated billing ticker
+  - Quick action buttons (End Session, Extend/Transfer placeholders)
+- [x] Filter & Search bar (status filter: All, Available, Occupied, Maintenance; search by room name)
+
+#### 1.6 Basic Session Lifecycle
+- [x] "Start Session" modal / bottom sheet:
+  - Preset duration chips: 30 min, 1 hr, 1 hr 30 min, 2 hrs, Custom (hrs + mins)
+  - Optional customer selector (search existing or quick-enter name & mobile)
+  - Player & controller count selectors
+  - Price preview calculator (Rate × Duration)
+- [x] Session Start transaction:
+  - Unique session ID (UUID)
+  - Timestamp snapshot of start time & scheduled end time
+  - Hourly rate snapshot (protects against future room price changes)
+  - Initial `SessionSegment` creation
+  - Room status transition to `Occupied`
+  - Audit event logged in `SessionEvents`
+- [x] Live timer ticker (periodic tick updating elapsed & remaining time based on timestamps)
+- [x] End session dialog:
+  - Detailed breakdown of duration, rate snapshot, total payable
+  - Cash-only collection choices: "PAID (CASH)" vs "MARK UNPAID"
+  - Frees room back to AVAILABLE and records payment ledger entry
   - Elapsed live timer & countdown remaining timer (timestamp-based)
   - Live estimated billing ticker
   - Quick action buttons: Extend, Transfer, End Session
