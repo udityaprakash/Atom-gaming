@@ -1,0 +1,315 @@
+# PLAYZONE CONTROL - Development Progress & TODO Tracker
+
+> **Project:** PLAYZONE CONTROL (Version 1.1)  
+> **Platform:** Android (Flutter / Dart)  
+> **Architecture:** Local-first Offline Architecture (Riverpod + Drift SQLite + GoRouter)  
+> **Payment Mode:** Cash Only (Digital / UPI marked as *Coming Soon*)  
+> **Source Specification:** `README.md` (SRS v1.1)  
+> **Status:** Pending implementation kickoff
+
+---
+
+## Progress Overview
+- [ ] **Phase 1: Project Setup, Database Schema & Core Room/Session Management** (0%)
+- [ ] **Phase 2: Advanced Session Controls, Alarms & Crash Recovery** (0%)
+- [ ] **Phase 3: Billing Engine, Cash Settlement & Receipts** (0%)
+- [ ] **Phase 4: Customer Management, Session History & Revenue Analytics** (0%)
+- [ ] **Phase 5: Data Backup/Export, Security, Maintenance & Settings** (0%)
+- [ ] **Phase 6: Comprehensive Testing, Hardening & Release Polish** (0%)
+
+---
+
+## Detailed Task Breakdown
+
+### Phase 1: Project Setup, Database Schema & Core Room/Session Management
+
+#### 1.1 Dependencies & Project Configuration
+- [ ] Update `pubspec.yaml` with required packages:
+  - State & Routing: `flutter_riverpod`, `riverpod_annotation`, `go_router`
+  - Database: `drift`, `sqlite3_flutter_libs`, `path_provider`, `path`
+  - Dev/Code Generation: `build_runner`, `drift_dev`, `riverpod_generator`
+  - UI & Charts: `fl_chart`, `intl`, `google_fonts`, `lucide_icons` / `cupertino_icons`
+  - Audio & Hardware: `flutter_local_notifications`, `audioplayers`, `vibration`, `local_auth`
+  - Utilities: `share_plus`, `csv`, `file_picker`, `uuid`
+- [ ] Configure Android manifest permissions:
+  - `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`
+- [ ] Set up directory structure adhering to feature-first layered architecture:
+  - `lib/core/` (constants, theme, utils, services, database, notifications)
+  - `lib/features/` (dashboard, rooms, sessions, billing, customers, cash_collection, analytics, history, backup, settings, about)
+  - `lib/shared/` (widgets, models, extensions)
+
+#### 1.2 Design System & Theming
+- [ ] Implement gaming dark theme palette (`#0B0F14` background, `#151D27` card background, neon accents)
+- [ ] Define status color constants:
+  - Available: Neon Green (`#16E58B`)
+  - Occupied: Neon Red (`#FF4058`)
+  - Ending Soon: Amber / Neon Orange (`#FFB547`)
+  - Paused: Neon Blue (`#438DFF`)
+  - Maintenance: Muted Grey (`#6B7280`)
+  - Primary Accent: Neon Purple (`#8B5CF6`)
+- [ ] Build reusable UI components:
+  - Glassmorphic card container with neon glowing borders
+  - Gaming badge / status chips
+  - Action buttons (Neon outlined, elevated neon gradient)
+  - Custom numeric keypad and duration pickers
+
+#### 1.3 Drift SQLite Database Layer
+- [ ] Create Drift database tables in `lib/core/database/`:
+  - `Rooms`: id, room_name, equipment_type, controller_count, hourly_rate, status, description, created_at, updated_at
+  - `Customers`: id, name, phone, notes, created_at, updated_at
+  - `Sessions`: id, customer_id, status, started_at, scheduled_end_at, ended_at, billing_policy, total_duration_seconds, total_amount, payment_status, created_at
+  - `SessionSegments`: id, session_id, room_id, started_at, ended_at, hourly_rate_snapshot, amount
+  - `SessionExtensions`: id, session_id, previous_end_time, new_end_time, extension_minutes, created_at
+  - `Payments`: id, session_id, amount_due, amount_collected, payment_method, payment_status, transaction_reference, paid_at, created_at, updated_at
+  - `SessionEvents`: id, session_id, event_type, event_timestamp, old_value, new_value, notes
+  - `AppSettings`: key-value preferences (sound, vibration, billing mode, business details)
+- [ ] Generate Drift ORM code via `build_runner`
+- [ ] Implement database DAOs for transactional room & session operations
+
+#### 1.4 Room Management Feature
+- [ ] Room listing screen (grid & list view)
+- [ ] Create / Add Room modal dialog (name, equipment type: PS5, PS4, Xbox, PC, controller count, hourly rate in ₹, notes)
+- [ ] Edit Room & Room Details (preserves immutable internal room ID and historical sessions)
+- [ ] Room status management (Available, Occupied, Maintenance, Deactivated)
+- [ ] Delete Room safeguards (prevent deletion if historical session records exist)
+
+#### 1.5 Live Dashboard & Real-Time Room Grid
+- [ ] Top statistics summary bar:
+  - Total rooms, Available, Occupied, Maintenance
+  - Active sessions count, Today's sessions count, Today's revenue, Today's unpaid dues
+- [ ] 2-column responsive Room Grid displaying live room cards
+- [ ] Available Room Card component:
+  - Room name, equipment badge, controller badge, hourly rate (₹/hr)
+  - "Start Session" quick action button
+- [ ] Occupied Room Card component:
+  - Customer name / Guest, start time, expected end time
+  - Elapsed live timer & countdown remaining timer (timestamp-based)
+  - Live estimated billing ticker
+  - Quick action buttons: Extend, Transfer, End Session
+- [ ] Filter & Search bar (status filter: All, Available, Occupied, Maintenance; search by room name)
+
+#### 1.6 Basic Session Lifecycle
+- [ ] "Start Session" modal / bottom sheet:
+  - Preset duration chips: 30 min, 1 hr, 1 hr 30 min, 2 hrs, Custom (hrs + mins)
+  - Optional customer selector (search existing or quick-enter name & mobile)
+  - Player & controller count selectors
+  - Price preview calculator (Rate × Duration)
+- [ ] Session Start transaction:
+  - Unique session ID (UUID)
+  - Timestamp snapshot of start time & scheduled end time
+  - Hourly rate snapshot (protects against future room price changes)
+  - Initial `SessionSegment` creation
+  - Room status transition to `Occupied`
+  - Audit event logged in `SessionEvents`
+
+---
+
+### Phase 2: Advanced Session Controls, Alarms & Crash Recovery
+
+#### 2.1 Session Extensions
+- [ ] Quick extension bottom sheet (+15 min, +30 min, +1 hour, custom)
+- [ ] Persist extension record in `SessionExtensions` table
+- [ ] Recalculate scheduled end time and update active session state
+- [ ] Log extension event in audit log
+
+#### 2.2 Pause & Resume Controls
+- [ ] Pause session action:
+  - Record pause timestamp
+  - Halt billable time accumulation
+  - Update room visual status to `Paused` (Neon Blue)
+- [ ] Resume session action:
+  - Calculate paused duration and adjust scheduled end time
+  - Resume billable countdown
+  - Record resume event in `SessionEvents`
+
+#### 2.3 Room Transfer Module
+- [ ] Transfer Room workflow:
+  - View available destination rooms with their equipment & hourly rates
+  - Live price differential preview
+- [ ] Room transfer transactional execution:
+  - Close active `SessionSegment` for current room (set ended_at & segment amount)
+  - Free up previous room (switch status to `Available`)
+  - Create new `SessionSegment` with destination room ID & destination rate snapshot
+  - Set destination room status to `Occupied`
+  - Keep overall customer `Session` continuous and active
+  - Log transfer event in audit log
+
+#### 2.4 Session Completion Alert & Alarm Engine
+- [ ] Timestamp-based background alert scheduling:
+  - Use `flutter_local_notifications` with exact alarm schedule
+  - Lock-screen priority notification with room name and alert sound
+- [ ] Audio & Vibration trigger:
+  - Multiple built-in gaming alarm sounds via `audioplayers`
+  - Haptic / vibration patterns (Pulse, Long, Continuous)
+- [ ] Overtime behavior (Critical Rule):
+  - Session does **NOT** auto-terminate when time runs out
+  - Mark status as `Time Expired / Overtime`
+  - Room remains occupied and overtime billing charges accrue continuously
+  - Notification banner with direct "Extend" and "End Session" action buttons
+
+#### 2.5 System Crash & Reboot Recovery
+- [ ] On app launch, query database for active sessions
+- [ ] Reconstruct real-time elapsed/remaining time directly from database `started_at` and `scheduled_end_at` timestamps (no in-memory counters as source of truth)
+- [ ] Reschedule missing OS alarms for any pending sessions
+- [ ] Handle sessions that expired while device/app was off (flag directly as Overtime)
+
+#### 2.6 Alarm & Notification Configuration Screen
+- [ ] Alarm volume, repeat interval (Once, 30s, 1m), snooze (1m, 2m, 5m)
+- [ ] Sound selector with "Test Sound" button
+- [ ] Vibration pattern selector with "Test Vibration" button
+- [ ] Battery optimization & alarm permission guide/dialog
+
+---
+
+### Phase 3: Billing Engine, Cash Settlement & Receipts
+
+#### 3.1 Billing Engine
+- [ ] Billing calculation engine supporting:
+  - Per-minute calculation (default: rate/60 per minute)
+  - 15-minute / 30-minute block rounding
+  - Minimum session charge threshold
+  - Grace period configuration
+  - Overtime calculation
+- [ ] Multi-segment bill aggregator (combining multiple room rates during transfers)
+
+#### 3.2 Session Completion & Settlement Screen
+- [ ] Detailed final session review:
+  - Total elapsed time, breakdown per room segment
+  - Extension log & paused intervals
+  - Hourly rate snapshot applied
+  - Gross amount, discounts/adjustments, final payable total
+- [ ] Cash Payment Actions:
+  - "Mark as PAID": Records cash collected amount equal to payable total and current timestamp
+  - "Mark as UNPAID": Records amount collected as ₹0, marks payment status as `UNPAID`, and logs full balance as outstanding
+
+#### 3.3 Outstanding Balance & Cash Collection Later
+- [ ] Unpaid sessions listing in Sessions screen
+- [ ] "Collect Cash" workflow for previously unpaid sessions:
+  - Record actual collection timestamp (`paid_at`)
+  - Update payment record to `PAID` without modifying the original session completion timestamp
+  - Automatically update daily cash drawer and outstanding balance
+
+#### 3.4 Future Payment Methods ("Coming Soon" UI)
+- [ ] Render "Other Payment Methods – Coming Soon" section in billing screen
+- [ ] Non-clickable / informational placeholders for:
+  - UPI (QR / VPA) – Coming Soon
+  - Credit / Debit Card – Coming Soon
+  - Digital Wallets – Coming Soon
+  - Net Banking – Coming Soon
+- [ ] Architecture isolation ensuring cash ledger remains pure and immutable
+
+#### 3.5 Digital Receipt & Sharing
+- [ ] Formatted gaming receipt card:
+  - Gaming Zone Name & Logo
+  - Session ID & Date/Time
+  - Customer Name & Contact (if provided)
+  - Room & Equipment details
+  - Time breakdown & billing calculation
+  - Payment status (`PAID [CASH]` / `UNPAID`)
+- [ ] Share receipt as image or text via `share_plus`
+
+---
+
+### Phase 4: Customer Management, Session History & Revenue Analytics
+
+#### 4.1 Customer Directory
+- [ ] Customer list with search by name or phone number
+- [ ] Add / Edit customer modal (name, phone, notes)
+- [ ] Customer profile view:
+  - Total visits & total gaming hours
+  - Total amount spent (cash paid)
+  - Outstanding unpaid dues
+  - Full history of past sessions with direct receipt access
+
+#### 4.2 Comprehensive Session History
+- [ ] Session history view with multi-faceted filtering:
+  - Date ranges: Today, Yesterday, This Week, This Month, Custom Date Range
+  - Payment filter: All, Paid, Unpaid
+  - Room filter: Filter by specific room
+  - Customer filter: Filter by customer
+- [ ] Detailed Session Timeline View:
+  - Chronological audit log: Session Started -> Paused -> Resumed -> Transferred -> Extended -> Ended -> Cash Collected
+
+#### 4.3 Revenue & Business Analytics Dashboard
+- [ ] Financial metrics overview:
+  - Total Billed Revenue
+  - Actual Cash Collected (Strict separation from billed)
+  - Outstanding Unpaid Balance
+  - Average Session Duration & Average Ticket Size
+- [ ] Interactive FL Chart visualizations:
+  - Daily / Weekly / Monthly revenue bar/line charts
+  - Cash Collected vs Outstanding balance visual comparison
+  - Peak hours heat chart (occupancy by hour of day)
+  - Weekday vs Weekend revenue split
+- [ ] Room Utilization Reports:
+  - Occupancy percentage per room
+  - Revenue generated per equipment type (PS5 vs PS4 vs PC)
+  - Highest revenue-generating and most frequented rooms
+
+#### 4.4 Daily Cash Closing (Cash Drawer Reconciliation)
+- [ ] Dedicated Daily Closing Report:
+  - Cash collected from today's sessions
+  - Cash collected today from *past* unpaid sessions
+  - Total cash in drawer
+  - Today's unpaid debt accrued
+- [ ] Cash reconciliation input (actual physical cash counted vs system recorded)
+
+---
+
+### Phase 5: Data Backup/Export, Security, Maintenance & Settings
+
+#### 5.1 Data Export
+- [ ] JSON Export: Complete database dump formatted for data recovery or external analysis
+- [ ] CSV Export:
+  - Sessions CSV (ID, room, customer, start, end, duration, total, payment status)
+  - Cash Collection CSV (Payment ID, session, amount collected, timestamp)
+  - Customer Directory CSV
+- [ ] File saving to local storage & sharing via system share sheet
+
+#### 5.2 Backup & Restoration
+- [ ] Full local SQLite database backup creation (`.db` snapshot with timestamp)
+- [ ] Backup integrity validation check before restoring
+- [ ] Restore database workflow with safety confirmation warning
+- [ ] Auto-backup on daily closing (optional setting)
+
+#### 5.3 Maintenance & Reservation Management
+- [ ] Room Maintenance toggle:
+  - Mark room Under Maintenance with reason notes & start date
+  - Prevent new session creation on maintenance rooms
+  - Restore to Available when complete
+- [ ] Advance Reservations module:
+  - Book room for future date/time
+  - Conflict detection with existing reservations and active sessions
+
+#### 5.4 App Security & Authentication
+- [ ] Optional Security PIN lock
+- [ ] Biometric authentication (fingerprint / face unlock via `local_auth`)
+- [ ] Sensitive action guards (deleting rooms, restoring backups, database reset)
+
+#### 5.5 Settings & About Screen
+- [ ] Business profile setup (Gaming Zone Name, contact, address, currency symbol)
+- [ ] Operating hours configuration with closing warning banner
+- [ ] About screen with app version, build number, technology credits, licenses, developer info
+
+---
+
+### Phase 6: Comprehensive Testing, Hardening & Release Polish
+
+#### 6.1 Unit & Integration Testing
+- [ ] Drift DAO tests (CRUD operations, room conflicts, segment calculations)
+- [ ] Billing engine unit tests (exact per-minute calculation, block pricing, overtime)
+- [ ] Timestamp & duration math unit tests
+- [ ] Riverpod state management tests
+
+#### 6.2 Edge Case & Reliability Verification
+- [ ] App kill & restart while session is active (verify zero drift in timer)
+- [ ] Multiple simultaneous sessions across all rooms
+- [ ] Room transfer between different hourly rates
+- [ ] Cash collection state transitions (Unpaid -> Paid)
+- [ ] Corrupted backup recovery handling
+
+#### 6.3 UI/UX Polish & Final Run
+- [ ] Verify gaming dark theme consistency, typography, paddings, and contrast
+- [ ] Empty state illustrations and informative messages
+- [ ] Smooth haptic feedback and animations
+- [ ] Complete acceptance criteria sign-off (SRS Section 22)
