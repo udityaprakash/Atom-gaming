@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/services/alarm_service.dart';
 import '../data/session_repository.dart';
 
 final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
-  return SessionRepository(db);
+  final alarmService = ref.watch(alarmServiceProvider);
+  return SessionRepository(db, alarmService);
 });
 
 final activeRoomSessionsStreamProvider = StreamProvider<List<ActiveRoomSession>>((ref) {

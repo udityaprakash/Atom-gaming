@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
 import 'core/database/database_provider.dart';
 import 'core/router/app_router.dart';
+import 'core/services/alarm_service.dart';
+import 'core/services/recovery_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/rooms/data/room_repository.dart';
 
@@ -12,6 +14,16 @@ void main() async {
   final container = ProviderContainer();
   // Check and seed initial sample rooms from SRS Section 3.1 if empty
   await _seedInitialRoomsIfEmpty(container);
+
+  // Phase 2: Initialize Alarm Service & Recover active sessions on startup
+  final alarmService = container.read(alarmServiceProvider);
+  await alarmService.initialize();
+
+  final recoveryService = RecoveryService(
+    container.read(appDatabaseProvider),
+    alarmService,
+  );
+  await recoveryService.recoverActiveSessions();
 
   runApp(
     UncontrolledProviderScope(

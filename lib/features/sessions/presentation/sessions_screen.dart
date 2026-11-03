@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/time_formatter.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/neon_button.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../data/session_repository.dart';
 import '../providers/session_provider.dart';
+import 'widgets/end_session_dialog.dart';
+import 'widgets/extend_session_sheet.dart';
+import 'widgets/transfer_room_dialog.dart';
 
 class SessionsScreen extends ConsumerWidget {
   const SessionsScreen({super.key});
@@ -34,7 +39,7 @@ class SessionsScreen extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.hourglass_empty, size: 48, color: AppColors.textMuted),
+                  const Icon(Icons.hourglass_empty, size: 48, color: AppColors.textMuted),
                   const SizedBox(height: 12),
                   Text(
                     'No Active Sessions',
@@ -76,16 +81,24 @@ class SessionsScreen extends ConsumerWidget {
           orElse: () => DateTime.now(),
         );
 
-    final elapsed = now.difference(active.segment.startedAt);
-    final remaining = active.session.scheduledEndAt.difference(now);
+    final session = active.session;
+    final segment = active.segment;
+    final isPaused = session.status == AppConstants.sessionPaused;
+
+    final elapsed = now.difference(segment.startedAt);
+    final remaining = session.scheduledEndAt.difference(now);
     final isOvertime = remaining.isNegative;
 
     final elapsedMinutes = elapsed.inSeconds / 60.0;
-    final estimatedCharge = ((elapsedMinutes / 60.0) * active.segment.hourlyRateSnapshot).roundToDouble();
+    final estimatedCharge = ((elapsedMinutes / 60.0) * segment.hourlyRateSnapshot).roundToDouble();
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
-      borderColor: isOvertime ? AppColors.occupied : AppColors.primaryGlow,
+      borderColor: isPaused
+          ? AppColors.paused
+          : isOvertime
+              ? AppColors.occupied
+              : AppColors.primaryGlow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -100,7 +113,13 @@ class SessionsScreen extends ConsumerWidget {
                   color: AppColors.textPrimary,
                 ),
               ),
-              StatusBadge(status: isOvertime ? 'OVERTIME' : active.session.status),
+              StatusBadge(
+                status: isPaused
+                    ? 'PAUSED'
+                    : isOvertime
+                        ? 'OVERTIME'
+                        : active.session.status,
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -116,10 +135,86 @@ class SessionsScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric('Started', TimeFormatter.formatTime(active.segment.startedAt)),
-              _buildMetric('Expected End', TimeFormatter.formatTime(active.session.scheduledEndAt)),
+              _buildMetric('Started', TimeFormatter.formatTime(segment.startedAt)),
+              _buildMetric('Scheduled End', TimeFormatter.formatTime(active.session.scheduledEndAt)),
               _buildMetric('Elapsed', TimeFormatter.formatDuration(elapsed)),
               _buildMetric('Est. Bill', CurrencyFormatter.format(estimatedCharge), isHighlighted: true),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Phase 2 Action Buttons: Extend, Transfer, Pause/Resume, End
+          Row(
+            children: [
+              Expanded(
+                child: NeonButton(
+                  label: 'EXTEND',
+                  icon: Icons.more_time,
+                  color: AppColors.primary,
+                  isOutlined: true,
+                  height: 34,
+                  fontSize: 11,
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => ExtendSessionSheet(activeSession: active),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: NeonButton(
+                  label: 'TRANSFER',
+                  icon: Icons.swap_horiz,
+                  color: AppColors.secondary,
+                  isOutlined: true,
+                  height: 34,
+                  fontSize: 11,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => TransferRoomDialog(activeSession: active),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: NeonButton(
+                  label: isPaused ? 'RESUME' : 'PAUSE',
+                  icon: isPaused ? Icons.play_arrow : Icons.pause,
+                  color: isPaused ? AppColors.available : AppColors.paused,
+                  isOutlined: true,
+                  height: 34,
+                  fontSize: 11,
+                  onPressed: () async {
+                    final repo = ref.read(sessionRepositoryProvider);
+                    if (isPaused) {
+                      await repo.resumeSession(sessionId: session.id);
+                    } else {
+                      await repo.pauseSession(sessionId: session.id);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              NeonButton(
+                label: 'END',
+                icon: Icons.stop_circle_outlined,
+                color: AppColors.occupied,
+                height: 34,
+                fontSize: 11,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => EndSessionDialog(activeSession: active),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -133,7 +228,11 @@ class SessionsScreen extends ConsumerWidget {
       children: [
         Text(
           label,
-          style: GoogleFonts.rajdhani(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.bold),
+          style: GoogleFonts.rajdhani(
+            fontSize: 10,
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         Text(
           value,

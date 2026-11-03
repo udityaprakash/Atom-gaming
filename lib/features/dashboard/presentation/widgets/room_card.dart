@@ -11,7 +11,9 @@ import '../../../../shared/widgets/neon_button.dart';
 import '../../../../shared/widgets/status_badge.dart';
 import '../../../sessions/data/session_repository.dart';
 import '../../../sessions/presentation/widgets/end_session_dialog.dart';
+import '../../../sessions/presentation/widgets/extend_session_sheet.dart';
 import '../../../sessions/presentation/widgets/start_session_sheet.dart';
+import '../../../sessions/presentation/widgets/transfer_room_dialog.dart';
 import '../../../sessions/providers/session_provider.dart';
 
 class RoomCard extends ConsumerWidget {
@@ -27,17 +29,23 @@ class RoomCard extends ConsumerWidget {
     final isAvailable = room.status == AppConstants.statusAvailable;
     final isOccupied = room.status == AppConstants.statusOccupied ||
         room.status == AppConstants.statusEndingSoon;
+    final isPaused = room.status == AppConstants.statusPaused;
     final isMaintenance = room.status == AppConstants.statusMaintenance;
 
     final isOvertime = isOccupied &&
         activeSession != null &&
         DateTime.now().isAfter(activeSession.session.scheduledEndAt);
 
-    final effectiveStatus = isOvertime ? AppConstants.sessionOvertime : room.status;
+    final effectiveStatus = isPaused
+        ? AppConstants.statusPaused
+        : isOvertime
+            ? AppConstants.sessionOvertime
+            : room.status;
 
     Color borderColor = AppColors.cardBorder;
     if (isAvailable) borderColor = AppColors.available.withValues(alpha: 0.4);
     if (isOccupied) borderColor = AppColors.occupied.withValues(alpha: 0.5);
+    if (isPaused) borderColor = AppColors.paused.withValues(alpha: 0.6);
     if (isMaintenance) borderColor = AppColors.maintenance.withValues(alpha: 0.4);
 
     return GlassCard(
@@ -110,7 +118,7 @@ class RoomCard extends ConsumerWidget {
               // Dynamic Body based on Room State
               if (isAvailable)
                 _buildAvailableBody(context)
-              else if (isOccupied && activeSession != null)
+              else if ((isOccupied || isPaused) && activeSession != null)
                 _buildOccupiedBody(context, ref, activeSession)
               else if (isMaintenance)
                 _buildMaintenanceBody()
@@ -163,7 +171,6 @@ class RoomCard extends ConsumerWidget {
     WidgetRef ref,
     ActiveRoomSession active,
   ) {
-    // Watch ticker for real-time recalculation
     final now = ref.watch(liveTimerTickerProvider).maybeWhen(
           data: (d) => d,
           orElse: () => DateTime.now(),
@@ -172,12 +179,12 @@ class RoomCard extends ConsumerWidget {
     final session = active.session;
     final segment = active.segment;
     final customer = active.customer;
+    final isPaused = session.status == AppConstants.sessionPaused;
 
     final elapsed = now.difference(segment.startedAt);
     final remaining = session.scheduledEndAt.difference(now);
     final isOvertime = remaining.isNegative;
 
-    // Estimate bill on the fly: Rate / 60 * elapsed minutes
     final elapsedMinutes = elapsed.inSeconds / 60.0;
     final estimatedAmount = ((elapsedMinutes / 60.0) * segment.hourlyRateSnapshot).roundToDouble();
 
@@ -212,9 +219,11 @@ class RoomCard extends ConsumerWidget {
             color: AppColors.surfaceElevated,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isOvertime
-                  ? AppColors.occupied.withValues(alpha: 0.6)
-                  : AppColors.cardBorder,
+              color: isPaused
+                  ? AppColors.paused.withValues(alpha: 0.6)
+                  : isOvertime
+                      ? AppColors.occupied.withValues(alpha: 0.6)
+                      : AppColors.cardBorder,
             ),
           ),
           child: Row(
@@ -224,7 +233,7 @@ class RoomCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PLAYED',
+                    isPaused ? 'STATUS' : 'PLAYED',
                     style: GoogleFonts.rajdhani(
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
@@ -232,11 +241,11 @@ class RoomCard extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    TimeFormatter.formatDuration(elapsed),
+                    isPaused ? 'PAUSED' : TimeFormatter.formatDuration(elapsed),
                     style: GoogleFonts.orbitron(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: isPaused ? AppColors.paused : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -245,21 +254,35 @@ class RoomCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    isOvertime ? 'OVERTIME' : 'REMAINING',
+                    isPaused
+                        ? 'HOLD'
+                        : isOvertime
+                            ? 'OVERTIME'
+                            : 'REMAINING',
                     style: GoogleFonts.rajdhani(
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
-                      color: isOvertime ? AppColors.occupied : AppColors.endingSoon,
+                      color: isPaused
+                          ? AppColors.paused
+                          : isOvertime
+                              ? AppColors.occupied
+                              : AppColors.endingSoon,
                     ),
                   ),
                   Text(
-                    isOvertime
-                        ? '+${TimeFormatter.formatDuration(remaining.abs())}'
-                        : TimeFormatter.formatDuration(remaining),
+                    isPaused
+                        ? 'ON PAUSE'
+                        : isOvertime
+                            ? '+${TimeFormatter.formatDuration(remaining.abs())}'
+                            : TimeFormatter.formatDuration(remaining),
                     style: GoogleFonts.orbitron(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: isOvertime ? AppColors.occupied : AppColors.endingSoon,
+                      color: isPaused
+                          ? AppColors.paused
+                          : isOvertime
+                              ? AppColors.occupied
+                              : AppColors.endingSoon,
                     ),
                   ),
                 ],
@@ -269,7 +292,7 @@ class RoomCard extends ConsumerWidget {
         ),
         const SizedBox(height: 6),
 
-        // Current Bill Estimate & End Button
+        // Est. Bill & End Button
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -298,7 +321,7 @@ class RoomCard extends ConsumerWidget {
               label: 'END',
               icon: Icons.stop_circle_outlined,
               color: AppColors.occupied,
-              height: 32,
+              height: 30,
               fontSize: 11,
               onPressed: () {
                 showDialog(
@@ -310,7 +333,102 @@ class RoomCard extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: 6),
+
+        // Phase 2 Advanced Controls: Extend, Transfer, Pause/Resume
+        Row(
+          children: [
+            // Quick Extend
+            Expanded(
+              child: _buildSmallAction(
+                label: 'EXTEND',
+                icon: Icons.more_time,
+                color: AppColors.primary,
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => ExtendSessionSheet(activeSession: active),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 4),
+
+            // Quick Transfer
+            Expanded(
+              child: _buildSmallAction(
+                label: 'MOVE',
+                icon: Icons.swap_horiz,
+                color: AppColors.secondary,
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => TransferRoomDialog(activeSession: active),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 4),
+
+            // Pause / Resume
+            Expanded(
+              child: _buildSmallAction(
+                label: isPaused ? 'RESUME' : 'PAUSE',
+                icon: isPaused ? Icons.play_arrow : Icons.pause,
+                color: isPaused ? AppColors.available : AppColors.paused,
+                onTap: () async {
+                  final repo = ref.read(sessionRepositoryProvider);
+                  if (isPaused) {
+                    await repo.resumeSession(sessionId: session.id);
+                  } else {
+                    await repo.pauseSession(sessionId: session.id);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildSmallAction({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 11, color: color),
+              const SizedBox(width: 2),
+              Text(
+                label,
+                style: GoogleFonts.rajdhani(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

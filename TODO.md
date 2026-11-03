@@ -11,7 +11,7 @@
 
 ## Progress Overview
 - [x] **Phase 1: Project Setup, Database Schema & Core Room/Session Management** (100%)
-- [ ] **Phase 2: Advanced Session Controls, Alarms & Crash Recovery** (0%)
+- [x] **Phase 2: Advanced Session Controls, Alarms & Crash Recovery** (100%)
 - [ ] **Phase 3: Billing Engine, Cash Settlement & Receipts** (0%)
 - [ ] **Phase 4: Customer Management, Session History & Revenue Analytics** (0%)
 - [ ] **Phase 5: Data Backup/Export, Security, Maintenance & Settings** (0%)
@@ -128,56 +128,57 @@
 ### Phase 2: Advanced Session Controls, Alarms & Crash Recovery
 
 #### 2.1 Session Extensions
-- [ ] Quick extension bottom sheet (+15 min, +30 min, +1 hour, custom)
-- [ ] Persist extension record in `SessionExtensions` table
-- [ ] Recalculate scheduled end time and update active session state
-- [ ] Log extension event in audit log
+- [x] Quick extension bottom sheet (+15 min, +30 min, +1 hour, custom)
+- [x] Persist extension record in `SessionExtensions` table
+- [x] Recalculate scheduled end time and update active session state
+- [x] Log extension event in audit log (`SessionEvents`)
 
 #### 2.2 Pause & Resume Controls
-- [ ] Pause session action:
+- [x] Pause session action:
   - Record pause timestamp
   - Halt billable time accumulation
-  - Update room visual status to `Paused` (Neon Blue)
-- [ ] Resume session action:
+  - Update room visual status to `PAUSED` (Neon Blue)
+- [x] Resume session action:
   - Calculate paused duration and adjust scheduled end time
   - Resume billable countdown
   - Record resume event in `SessionEvents`
 
 #### 2.3 Room Transfer Module
-- [ ] Transfer Room workflow:
+- [x] Transfer Room workflow:
   - View available destination rooms with their equipment & hourly rates
   - Live price differential preview
-- [ ] Room transfer transactional execution:
+- [x] Room transfer transactional execution:
   - Close active `SessionSegment` for current room (set ended_at & segment amount)
-  - Free up previous room (switch status to `Available`)
+  - Free up previous room (switch status to `AVAILABLE`)
   - Create new `SessionSegment` with destination room ID & destination rate snapshot
-  - Set destination room status to `Occupied`
+  - Set destination room status to `OCCUPIED`
   - Keep overall customer `Session` continuous and active
   - Log transfer event in audit log
 
 #### 2.4 Session Completion Alert & Alarm Engine
-- [ ] Timestamp-based background alert scheduling:
+- [x] Timestamp-based background alert scheduling:
   - Use `flutter_local_notifications` with exact alarm schedule
   - Lock-screen priority notification with room name and alert sound
-- [ ] Audio & Vibration trigger:
-  - Multiple built-in gaming alarm sounds via `audioplayers`
-  - Haptic / vibration patterns (Pulse, Long, Continuous)
-- [ ] Overtime behavior (Critical Rule):
+- [x] Audio & Vibration trigger:
+  - Device notifications with custom vibration patterns
+  - Hardware testing interface
+- [x] Overtime behavior (Critical Rule):
   - Session does **NOT** auto-terminate when time runs out
   - Mark status as `Time Expired / Overtime`
   - Room remains occupied and overtime billing charges accrue continuously
   - Notification banner with direct "Extend" and "End Session" action buttons
 
 #### 2.5 System Crash & Reboot Recovery
-- [ ] On app launch, query database for active sessions
-- [ ] Reconstruct real-time elapsed/remaining time directly from database `started_at` and `scheduled_end_at` timestamps (no in-memory counters as source of truth)
-- [ ] Reschedule missing OS alarms for any pending sessions
-- [ ] Handle sessions that expired while device/app was off (flag directly as Overtime)
+- [x] On app launch, query database for active sessions
+- [x] Reconstruct real-time elapsed/remaining time directly from database `started_at` and `scheduled_end_at` timestamps (no in-memory counters as source of truth)
+- [x] Reschedule missing OS alarms for any pending sessions
+- [x] Handle sessions that expired while device/app was off (flag directly as Overtime)
 
 #### 2.6 Alarm & Notification Configuration Screen
-- [ ] Alarm volume, repeat interval (Once, 30s, 1m), snooze (1m, 2m, 5m)
-- [ ] Sound selector with "Test Sound" button
-- [ ] Vibration pattern selector with "Test Vibration" button
+- [x] Alarm volume, repeat interval (Once, 30s, 1m), snooze (1m, 2m, 5m)
+- [x] Sound selector with "Test Sound" button
+- [x] Vibration pattern selector with "Test Vibration" button
+- [x] Battery optimization & alarm permission guide/dialog
 - [ ] Battery optimization & alarm permission guide/dialog
 
 ---

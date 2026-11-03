@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import 'notification_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -80,24 +81,34 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 10),
 
           _buildTile(
+            context: context,
             title: 'Cash-Only Ledger',
             subtitle: 'Digital & UPI payments reserved for future release',
             icon: Icons.payments_outlined,
             trailingText: 'Active',
           ),
           _buildTile(
+            context: context,
             title: 'SQLite Drift Database',
             subtitle: 'Local-first persistent offline storage',
             icon: Icons.storage_outlined,
             trailingText: 'Ready',
           ),
           _buildTile(
+            context: context,
             title: 'Background Alarms & Notifications',
-            subtitle: 'Exact alarm scheduling for session expirations',
+            subtitle: 'Configure sounds, vibration, and exact alarm schedules',
             icon: Icons.alarm,
-            trailingText: 'Phase 2',
+            trailingText: 'Configure',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()),
+              );
+            },
           ),
           _buildTile(
+            context: context,
             title: 'Database Backup & JSON/CSV Export',
             subtitle: 'Full offline data ownership & snapshots',
             icon: Icons.cloud_download_outlined,
@@ -109,61 +120,72 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildTile({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required IconData icon,
     required String trailingText,
+    VoidCallback? onTap,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Row(
-        children: [
-          Icon(icon, size: 22, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
-                Text(
-                  title,
-                  style: GoogleFonts.rajdhani(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                Icon(icon, size: 22, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.rajdhani(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    trailingText,
+                    style: GoogleFonts.orbitron(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              trailingText,
-              style: GoogleFonts.orbitron(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

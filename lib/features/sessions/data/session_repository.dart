@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/services/alarm_service.dart';
 
 class ActiveRoomSession {
   final Session session;
@@ -41,9 +42,10 @@ class DashboardStats {
 
 class SessionRepository {
   final AppDatabase _db;
+  final AlarmService? _alarmService;
   final _uuid = const Uuid();
 
-  SessionRepository(this._db);
+  SessionRepository(this._db, [this._alarmService]);
 
   Stream<List<ActiveRoomSession>> watchActiveRoomSessions() {
     // Join Sessions with active SessionSegments (endedAt is null), Room and optional Customer
@@ -94,7 +96,7 @@ class SessionRepository {
     int? controllerCount,
     String? notes,
   }) async {
-    return await _db.transaction(() async {
+    final sessionId = await _db.transaction(() async {
       final now = DateTime.now();
 
       // 1. Verify Room exists and is Available
@@ -130,13 +132,13 @@ class SessionRepository {
         }
       }
 
-      final sessionId = _uuid.v4();
+      final sid = _uuid.v4();
       final scheduledEnd = now.add(Duration(minutes: durationMinutes));
 
       // 3. Insert Session
       await _db.into(_db.sessions).insert(
             SessionsCompanion(
-              id: Value(sessionId),
+              id: Value(sid),
               customerId: Value(customerId),
               status: const Value(AppConstants.sessionActive),
               startedAt: Value(now),
@@ -154,7 +156,7 @@ class SessionRepository {
       await _db.into(_db.sessionSegments).insert(
             SessionSegmentsCompanion(
               id: Value(segmentId),
-              sessionId: Value(sessionId),
+              sessionId: Value(sid),
               roomId: Value(roomId),
               startedAt: Value(now),
               hourlyRateSnapshot: Value(room.hourlyRate),
@@ -174,7 +176,7 @@ class SessionRepository {
       await _db.into(_db.sessionEvents).insert(
             SessionEventsCompanion(
               id: Value(_uuid.v4()),
-              sessionId: Value(sessionId),
+              sessionId: Value(sid),
               eventType: const Value('started'),
               eventTimestamp: Value(now),
               newValue: Value('Duration: $durationMinutes min | Rate: ₹${room.hourlyRate}/hr'),
@@ -182,8 +184,314 @@ class SessionRepository {
             ),
           );
 
-      return sessionId;
+      return sid;
     });
+
+    // Schedule background alert
+    if (_alarmService != null) {
+      final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(roomId))).getSingleOrNull();
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (room != null && session != null) {
+        await _alarmService.scheduleSessionAlert(
+          sessionId: sessionId,
+          roomName: room.roomName,
+          scheduledEndAt: session.scheduledEndAt,
+        );
+      }
+    }
+
+    return sessionId;
+  }
+
+  /// Extend an active or overtime session by [extensionMinutes]
+  Future<void> extendSession({
+    required String sessionId,
+    required int extensionMinutes,
+  }) async {
+    DateTime newScheduledEnd = DateTime.now();
+    String roomName = '';
+
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+
+      final prevEnd = session.scheduledEndAt;
+      // If session was already past scheduled end, extend from now or from prevEnd
+      final baseTime = prevEnd.isBefore(now) ? now : prevEnd;
+      newScheduledEnd = baseTime.add(Duration(minutes: extensionMinutes));
+
+      // 1. Record extension in SessionExtensions table
+      await _db.into(_db.sessionExtensions).insert(
+            SessionExtensionsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              previousEndTime: Value(prevEnd),
+              newEndTime: Value(newScheduledEnd),
+              extensionMinutes: Value(extensionMinutes),
+              createdAt: Value(now),
+            ),
+          );
+
+      // 2. Update Sessions scheduledEndAt & ensure status is ACTIVE
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        SessionsCompanion(
+          scheduledEndAt: Value(newScheduledEnd),
+          status: const Value(AppConstants.sessionActive),
+        ),
+      );
+
+      // 3. Find active room and ensure its status is OCCUPIED
+      final activeSegment = await (_db.select(_db.sessionSegments)
+            ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
+          .getSingleOrNull();
+
+      if (activeSegment != null) {
+        final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
+        if (room != null) {
+          roomName = room.roomName;
+          await (_db.update(_db.rooms)..where((t) => t.id.equals(room.id))).write(
+            RoomsCompanion(
+              status: const Value(AppConstants.statusOccupied),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+      }
+
+      // 4. Log Audit Event
+      await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              eventType: const Value('extended'),
+              eventTimestamp: Value(now),
+              oldValue: Value('End: $prevEnd'),
+              newValue: Value('End: $newScheduledEnd (+ $extensionMinutes min)'),
+            ),
+          );
+    });
+
+    // Reschedule OS Alarm for new end time
+    if (_alarmService != null && roomName.isNotEmpty) {
+      await _alarmService.scheduleSessionAlert(
+        sessionId: sessionId,
+        roomName: roomName,
+        scheduledEndAt: newScheduledEnd,
+      );
+    }
+  }
+
+  /// Pause an active session: stops countdown, halts billable accumulation
+  Future<void> pauseSession({required String sessionId}) async {
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+
+      // 1. Update Session status to PAUSED
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        const SessionsCompanion(status: Value(AppConstants.sessionPaused)),
+      );
+
+      // 2. Update active room to PAUSED
+      final activeSegment = await (_db.select(_db.sessionSegments)
+            ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
+          .getSingleOrNull();
+
+      if (activeSegment != null) {
+        await (_db.update(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).write(
+          RoomsCompanion(
+            status: const Value(AppConstants.statusPaused),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      // 3. Record Audit Event with pause timestamp
+      await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              eventType: const Value('paused'),
+              eventTimestamp: Value(now),
+              newValue: Value('Session paused at $now'),
+            ),
+          );
+    });
+
+    // Cancel pending alarm while paused
+    if (_alarmService != null) {
+      await _alarmService.cancelSessionAlert(sessionId);
+    }
+  }
+
+  /// Resume a paused session: calculates paused duration, pushes scheduledEndAt forward
+  Future<void> resumeSession({required String sessionId}) async {
+    DateTime newScheduledEnd = DateTime.now();
+    String roomName = '';
+
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+
+      // 1. Find last pause event to determine paused duration
+      final lastPause = await (_db.select(_db.sessionEvents)
+            ..where((t) => t.sessionId.equals(sessionId) & t.eventType.equals('paused'))
+            ..orderBy([(t) => OrderingTerm(expression: t.eventTimestamp, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
+
+      final pauseDuration = lastPause != null ? now.difference(lastPause.eventTimestamp) : Duration.zero;
+      newScheduledEnd = session.scheduledEndAt.add(pauseDuration);
+
+      // 2. Update Session status to ACTIVE & adjust scheduledEndAt
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        SessionsCompanion(
+          status: const Value(AppConstants.sessionActive),
+          scheduledEndAt: Value(newScheduledEnd),
+        ),
+      );
+
+      // 3. Update active room back to OCCUPIED
+      final activeSegment = await (_db.select(_db.sessionSegments)
+            ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
+          .getSingleOrNull();
+
+      if (activeSegment != null) {
+        final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
+        if (room != null) {
+          roomName = room.roomName;
+          await (_db.update(_db.rooms)..where((t) => t.id.equals(room.id))).write(
+            RoomsCompanion(
+              status: const Value(AppConstants.statusOccupied),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+      }
+
+      // 4. Log Audit Event
+      await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              eventType: const Value('resumed'),
+              eventTimestamp: Value(now),
+              oldValue: Value('Pause duration: ${pauseDuration.inMinutes} min'),
+              newValue: Value('New end time: $newScheduledEnd'),
+            ),
+          );
+    });
+
+    // Reschedule OS Alarm
+    if (_alarmService != null && roomName.isNotEmpty) {
+      await _alarmService.scheduleSessionAlert(
+        sessionId: sessionId,
+        roomName: roomName,
+        scheduledEndAt: newScheduledEnd,
+      );
+    }
+  }
+
+  /// Transfer customer session to a new room: closes old segment at its rate snapshot,
+  /// frees old room, opens new segment at new rate snapshot, marks destination room OCCUPIED.
+  Future<void> transferRoom({
+    required String sessionId,
+    required String destinationRoomId,
+  }) async {
+    String destRoomName = '';
+    DateTime scheduledEnd = DateTime.now();
+
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      // 1. Verify Destination Room is Available
+      final destRoom = await (_db.select(_db.rooms)..where((t) => t.id.equals(destinationRoomId))).getSingleOrNull();
+      if (destRoom == null) throw Exception('Destination room not found: $destinationRoomId');
+      if (destRoom.status != AppConstants.statusAvailable) {
+        throw Exception('Destination room "${destRoom.roomName}" is not available (${destRoom.status})');
+      }
+      destRoomName = destRoom.roomName;
+
+      // 2. Fetch Session & active Segment
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+      scheduledEnd = session.scheduledEndAt;
+
+      final activeSegment = await (_db.select(_db.sessionSegments)
+            ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
+          .getSingleOrNull();
+      if (activeSegment == null) throw Exception('No active segment found for session $sessionId');
+
+      final originRoom = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
+
+      // 3. Close the active segment: calculate played minutes & charge snapshot
+      final segmentMinutes = now.difference(activeSegment.startedAt).inSeconds / 60.0;
+      final segmentAmount = (segmentMinutes / 60.0) * activeSegment.hourlyRateSnapshot;
+
+      await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(activeSegment.id))).write(
+        SessionSegmentsCompanion(
+          endedAt: Value(now),
+          amount: Value(segmentAmount),
+        ),
+      );
+
+      // 4. Free origin room -> Set to AVAILABLE
+      await (_db.update(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).write(
+        RoomsCompanion(
+          status: const Value(AppConstants.statusAvailable),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // 5. Create new SessionSegment with destination room's rate snapshot
+      final newSegmentId = _uuid.v4();
+      await _db.into(_db.sessionSegments).insert(
+            SessionSegmentsCompanion(
+              id: Value(newSegmentId),
+              sessionId: Value(sessionId),
+              roomId: Value(destinationRoomId),
+              startedAt: Value(now),
+              hourlyRateSnapshot: Value(destRoom.hourlyRate),
+              amount: const Value(0.0),
+            ),
+          );
+
+      // 6. Set Destination Room status to OCCUPIED
+      await (_db.update(_db.rooms)..where((t) => t.id.equals(destinationRoomId))).write(
+        RoomsCompanion(
+          status: const Value(AppConstants.statusOccupied),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // 7. Log Transfer in SessionEvents
+      await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              eventType: const Value('transferred'),
+              eventTimestamp: Value(now),
+              oldValue: Value('${originRoom?.roomName ?? "Room"} (₹${activeSegment.hourlyRateSnapshot}/hr)'),
+              newValue: Value('${destRoom.roomName} (₹${destRoom.hourlyRate}/hr)'),
+            ),
+          );
+    });
+
+    // Update OS alarm for destination room name
+    if (_alarmService != null) {
+      await _alarmService.cancelSessionAlert(sessionId);
+      await _alarmService.scheduleSessionAlert(
+        sessionId: sessionId,
+        roomName: destRoomName,
+        scheduledEndAt: scheduledEnd,
+      );
+    }
   }
 
   Future<void> endSession({
@@ -282,6 +590,25 @@ class SessionRepository {
             ),
           );
     });
+
+    // Cancel OS alert on session completion
+    if (_alarmService != null) {
+      await _alarmService.cancelSessionAlert(sessionId);
+    }
+  }
+
+  Future<List<SessionExtension>> getSessionExtensions(String sessionId) {
+    return (_db.select(_db.sessionExtensions)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
+        .get();
+  }
+
+  Future<List<SessionEvent>> getSessionEvents(String sessionId) {
+    return (_db.select(_db.sessionEvents)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.eventTimestamp, mode: OrderingMode.asc)]))
+        .get();
   }
 
   Stream<DashboardStats> watchDashboardStats() {
