@@ -43,20 +43,6 @@ class ReservationsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: Text(
-          'NEW BOOKING',
-          style: GoogleFonts.orbitron(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-            letterSpacing: 1,
-          ),
-        ),
-        onPressed: () => _openBookingDialog(context),
-      ),
       body: reservationsAsync.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: AppColors.primary),

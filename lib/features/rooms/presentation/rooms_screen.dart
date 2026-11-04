@@ -41,20 +41,6 @@ class RoomsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => const AddEditRoomDialog(),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(
-          'NEW ROOM',
-          style: GoogleFonts.orbitron(fontWeight: FontWeight.bold, fontSize: 12),
-        ),
-      ),
       body: allRoomsAsync.when(
         data: (rooms) {
           if (rooms.isEmpty) {
