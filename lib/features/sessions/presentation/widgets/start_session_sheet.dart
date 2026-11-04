@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
 import '../../../../shared/widgets/neon_button.dart';
+import '../../../customers/providers/customer_provider.dart';
 import '../../providers/session_provider.dart';
 
 class StartSessionSheet extends ConsumerStatefulWidget {
@@ -41,6 +42,10 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
   late int _controllerCount;
   bool _isSubmitting = false;
 
+  String? _selectedCustomerId;
+  List<Customer> _customerSuggestions = [];
+  bool _showSuggestions = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +66,73 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
         _customMinutes = mins % 60;
       }
     }
+    _checkPrefillCustomer();
+  }
+
+  Future<void> _checkPrefillCustomer() async {
+    final name = widget.prefillCustomerName;
+    final phone = widget.prefillPhone;
+    if (name == null && phone == null) return;
+
+    final repo = ref.read(customerRepositoryProvider);
+    Customer? existing;
+    if (phone != null && phone.isNotEmpty) {
+      existing = await repo.findCustomerByPhone(phone);
+    }
+    if (existing == null && name != null && name.isNotEmpty) {
+      existing = await repo.findCustomerByName(name);
+    }
+
+    if (existing != null && mounted) {
+      setState(() {
+        _selectedCustomerId = existing!.id;
+        if (_phoneController.text.isEmpty && existing.phone != null) {
+          _phoneController.text = existing.phone!;
+        }
+      });
+    }
+  }
+
+  Future<void> _onCustomerInputChanged(String query) async {
+    final clean = query.trim();
+    if (clean.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _customerSuggestions = [];
+          _showSuggestions = false;
+        });
+      }
+      return;
+    }
+
+    final repo = ref.read(customerRepositoryProvider);
+    final results = await repo.searchCustomers(clean);
+    if (!mounted) return;
+
+    setState(() {
+      _customerSuggestions = results;
+      _showSuggestions = results.isNotEmpty;
+    });
+  }
+
+  void _selectCustomer(Customer customer) {
+    setState(() {
+      _selectedCustomerId = customer.id;
+      _nameController.text = customer.name;
+      _phoneController.text = customer.phone ?? '';
+      _customerSuggestions = [];
+      _showSuggestions = false;
+    });
+  }
+
+  void _clearSelectedCustomer() {
+    setState(() {
+      _selectedCustomerId = null;
+      _nameController.clear();
+      _phoneController.clear();
+      _customerSuggestions = [];
+      _showSuggestions = false;
+    });
   }
 
   @override
@@ -273,14 +345,49 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
             const SizedBox(height: 16),
 
             // Optional Customer Information
-            Text(
-              'CUSTOMER INFORMATION (OPTIONAL)',
-              style: GoogleFonts.orbitron(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textMuted,
-                letterSpacing: 0.8,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'CUSTOMER INFORMATION (OPTIONAL)',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                if (_selectedCustomerId != null)
+                  InkWell(
+                    onTap: _clearSelectedCustomer,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.available.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.available.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle, size: 12, color: AppColors.available),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Member Linked',
+                            style: GoogleFonts.rajdhani(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.available,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.close, size: 12, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -288,9 +395,28 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                 Expanded(
                   child: TextField(
                     controller: _nameController,
-                    decoration: const InputDecoration(
+                    onChanged: (val) {
+                      if (_selectedCustomerId != null) {
+                        // User modified name; un-pin ID so it re-resolves or updates
+                        _selectedCustomerId = null;
+                      }
+                      _onCustomerInputChanged(val);
+                    },
+                    decoration: InputDecoration(
                       labelText: 'Customer Name',
-                      prefixIcon: Icon(Icons.person_outline, size: 18),
+                      prefixIcon: const Icon(Icons.person_outline, size: 18),
+                      suffixIcon: _nameController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                _nameController.clear();
+                                setState(() {
+                                  _selectedCustomerId = null;
+                                  _showSuggestions = false;
+                                });
+                              },
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -299,14 +425,91 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                   child: TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
+                    onChanged: (val) {
+                      _onCustomerInputChanged(val);
+                    },
+                    decoration: InputDecoration(
                       labelText: 'Mobile Number',
-                      prefixIcon: Icon(Icons.phone_outlined, size: 18),
+                      prefixIcon: const Icon(Icons.phone_outlined, size: 18),
+                      suffixIcon: _phoneController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                _phoneController.clear();
+                                setState(() {
+                                  _showSuggestions = false;
+                                });
+                              },
+                            )
+                          : null,
                     ),
                   ),
                 ),
               ],
             ),
+
+            // Live Autocomplete Suggestions Dropdown
+            if (_showSuggestions && _customerSuggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                constraints: const BoxConstraints(maxHeight: 160),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  itemCount: _customerSuggestions.length,
+                  separatorBuilder: (_, __) => const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (context, index) {
+                    final c = _customerSuggestions[index];
+                    final hasPhone = c.phone != null && c.phone!.isNotEmpty;
+                    return ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                        child: Text(
+                          c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        c.name,
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      subtitle: Text(
+                        hasPhone ? c.phone! : 'No phone saved • Tap to autofill & add',
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 12,
+                          color: hasPhone ? AppColors.textSecondary : AppColors.accent,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.touch_app_outlined, size: 16, color: AppColors.primary),
+                      onTap: () => _selectCustomer(c),
+                    );
+                  },
+                ),
+              ),
+
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
@@ -407,6 +610,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
       await repo.startSession(
         roomId: widget.room.id,
         durationMinutes: _effectiveDurationMinutes,
+        customerId: _selectedCustomerId,
         customerName: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : null,
         customerPhone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
         playerCount: 1,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/security_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/time_formatter.dart';
@@ -198,23 +199,34 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                     ),
                   ],
                 ),
-                if (hasDebt)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.occupied.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.occupied),
-                    ),
-                    child: Text(
-                      'DUE: ${CurrencyFormatter.format(item.outstandingDebt)}',
-                      style: GoogleFonts.orbitron(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.occupied,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasDebt)
+                      Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.occupied.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.occupied),
+                        ),
+                        child: Text(
+                          'DUE: ${CurrencyFormatter.format(item.outstandingDebt)}',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.occupied,
+                          ),
+                        ),
                       ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                      tooltip: 'Delete Customer',
+                      onPressed: () => _confirmDeleteCustomer(context, ref, item),
                     ),
-                  ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -255,5 +267,40 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _confirmDeleteCustomer(BuildContext context, WidgetRef ref, CustomerWithStats item) async {
+    final customer = item.customer;
+    final sessionCount = item.totalVisits;
+    final security = ref.read(securityServiceProvider);
+
+    final String warningMsg = sessionCount > 0
+        ? 'Customer "${customer.name}" has $sessionCount past gaming session(s). If deleted, all past sessions will remain in your database as Guest User sessions, preserving complete financial and playtime records.\n\nAre you sure you want to delete this customer?'
+        : 'Are you sure you want to permanently delete customer "${customer.name}"?';
+
+    final confirmed = await security.authenticateAction(
+      context,
+      title: 'Delete Customer?',
+      message: warningMsg,
+      confirmLabel: 'DELETE CUSTOMER',
+      isDestructive: true,
+    );
+
+    if (confirmed == true && context.mounted) {
+      await ref.read(customerRepositoryProvider).deleteCustomer(customer.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              sessionCount > 0
+                  ? 'Customer deleted. Past sessions converted to Guest User.'
+                  : 'Customer "${customer.name}" deleted.',
+              style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: AppColors.surfaceElevated,
+          ),
+        );
+      }
+    }
   }
 }

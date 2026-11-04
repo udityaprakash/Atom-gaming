@@ -146,6 +146,7 @@ class SessionRepository {
   Future<String> startSession({
     required String roomId,
     required int durationMinutes,
+    String? customerId,
     String? customerName,
     String? customerPhone,
     int? playerCount,
@@ -164,22 +165,62 @@ class SessionRepository {
         throw Exception('Room "${room.roomName}" is not available (Current status: ${room.status})');
       }
 
-      // 2. Handle optional Customer registration
-      String? customerId;
-      if (customerName != null && customerName.trim().isNotEmpty) {
-        final existing = customerPhone != null && customerPhone.trim().isNotEmpty
-            ? await (_db.select(_db.customers)..where((t) => t.phone.equals(customerPhone.trim()))).getSingleOrNull()
-            : null;
+      // 2. Handle Customer Resolution & Auto-Upsert
+      String? resolvedCustomerId = customerId;
+      final cleanName = customerName?.trim();
+      final cleanPhone = customerPhone?.trim();
+
+      if (resolvedCustomerId != null) {
+        final custId = resolvedCustomerId;
+        // Customer was explicitly chosen: verify and update missing details
+        final existing = await (_db.select(_db.customers)..where((t) => t.id.equals(custId))).getSingleOrNull();
+        if (existing != null) {
+          final shouldUpdatePhone = cleanPhone != null && cleanPhone.isNotEmpty && existing.phone != cleanPhone;
+          final shouldUpdateName = cleanName != null && cleanName.isNotEmpty && existing.name != cleanName;
+          if (shouldUpdatePhone || shouldUpdateName) {
+            await (_db.update(_db.customers)..where((t) => t.id.equals(existing.id))).write(
+              CustomersCompanion(
+                name: shouldUpdateName ? Value(cleanName) : const Value.absent(),
+                phone: shouldUpdatePhone ? Value(cleanPhone) : const Value.absent(),
+                updatedAt: Value(now),
+              ),
+            );
+          }
+        }
+      } else if ((cleanName != null && cleanName.isNotEmpty) || (cleanPhone != null && cleanPhone.isNotEmpty)) {
+        // Find existing by phone
+        Customer? existing;
+        if (cleanPhone != null && cleanPhone.isNotEmpty) {
+          final phone = cleanPhone;
+          existing = await (_db.select(_db.customers)..where((t) => t.phone.equals(phone))).getSingleOrNull();
+        }
+
+        // If not found by phone, search by name
+        if (existing == null && cleanName != null && cleanName.isNotEmpty) {
+          final name = cleanName.toLowerCase();
+          existing = await (_db.select(_db.customers)..where((t) => t.name.lower().equals(name))).getSingleOrNull();
+        }
 
         if (existing != null) {
-          customerId = existing.id;
+          final matchedCustomer = existing;
+          resolvedCustomerId = matchedCustomer.id;
+          // If phone was newly supplied or missing, update it
+          if (cleanPhone != null && cleanPhone.isNotEmpty && (matchedCustomer.phone == null || matchedCustomer.phone!.isEmpty)) {
+            await (_db.update(_db.customers)..where((t) => t.id.equals(matchedCustomer.id))).write(
+              CustomersCompanion(
+                phone: Value(cleanPhone),
+                updatedAt: Value(now),
+              ),
+            );
+          }
         } else {
-          customerId = _uuid.v4();
+          // Create new customer in directory
+          resolvedCustomerId = _uuid.v4();
           await _db.into(_db.customers).insert(
                 CustomersCompanion(
-                  id: Value(customerId),
-                  name: Value(customerName.trim()),
-                  phone: Value(customerPhone?.trim()),
+                  id: Value(resolvedCustomerId),
+                  name: Value(cleanName?.isNotEmpty == true ? cleanName! : 'Customer $cleanPhone'),
+                  phone: Value(cleanPhone),
                   notes: Value(notes?.trim()),
                   createdAt: Value(now),
                   updatedAt: Value(now),
@@ -195,7 +236,7 @@ class SessionRepository {
       await _db.into(_db.sessions).insert(
             SessionsCompanion(
               id: Value(sid),
-              customerId: Value(customerId),
+              customerId: Value(resolvedCustomerId),
               status: const Value(AppConstants.sessionActive),
               startedAt: Value(now),
               scheduledEndAt: Value(scheduledEnd),

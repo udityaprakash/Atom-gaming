@@ -82,7 +82,7 @@ void main() {
       expect(stats.outstandingDebt, 0.0);
     });
 
-    test('Customer deletion safeguard prevents deleting customers with active/past sessions', () async {
+    test('Customer deletion converts past sessions to guest user sessions and removes customer', () async {
       final roomId = await roomRepo.createRoom(
         roomName: 'Room A',
         equipmentType: 'PC',
@@ -94,15 +94,58 @@ void main() {
         roomId: roomId,
         durationMinutes: 30,
         customerName: 'Aarav Sharma',
+        customerPhone: '9876543210',
       );
 
-      final session = await (db.select(db.sessions)..where((t) => t.id.equals(sessionId))).getSingle();
-      expect(session.customerId, isNotNull);
+      var session = await (db.select(db.sessions)..where((t) => t.id.equals(sessionId))).getSingle();
+      final customerId = session.customerId!;
+      expect(customerId, isNotNull);
 
-      expect(
-        () => customerRepo.deleteCustomer(session.customerId!),
-        throwsException,
+      // Delete customer
+      await customerRepo.deleteCustomer(customerId);
+
+      // Verify customer is removed from customer table
+      final deletedCustomer = await (db.select(db.customers)..where((t) => t.id.equals(customerId))).getSingleOrNull();
+      expect(deletedCustomer, isNull);
+
+      // Verify historical session remains intact in database as Guest User (customerId == null)
+      session = await (db.select(db.sessions)..where((t) => t.id.equals(sessionId))).getSingle();
+      expect(session.customerId, isNull);
+    });
+
+    test('Customer search and autocomplete matching by name and phone', () async {
+      await customerRepo.createCustomer(
+        name: 'Devansh Roy',
+        phone: '9988776655',
+        notes: 'VIP player',
       );
+
+      // Search by partial name
+      final byName = await customerRepo.searchCustomers('devan');
+      expect(byName.length, 1);
+      expect(byName.first.name, 'Devansh Roy');
+
+      // Search by partial phone
+      final byPhone = await customerRepo.searchCustomers('7766');
+      expect(byPhone.length, 1);
+      expect(byPhone.first.name, 'Devansh Roy');
+
+      // Upsert: existing customer without phone gets updated when phone is provided
+      final noPhoneCustId = await customerRepo.createCustomer(
+        name: 'Vikram Joshi',
+      );
+      var noPhoneCust = await (db.select(db.customers)..where((t) => t.id.equals(noPhoneCustId))).getSingle();
+      expect(noPhoneCust.phone, isNull);
+
+      // Upsert with new phone
+      final updatedId = await customerRepo.upsertCustomer(
+        name: 'Vikram Joshi',
+        phone: '9112233445',
+      );
+      expect(updatedId, noPhoneCustId);
+
+      final updatedCust = await (db.select(db.customers)..where((t) => t.id.equals(noPhoneCustId))).getSingle();
+      expect(updatedCust.phone, '9112233445');
     });
   });
 
