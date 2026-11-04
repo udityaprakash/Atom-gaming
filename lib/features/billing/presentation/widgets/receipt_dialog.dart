@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/receipt_service.dart';
@@ -7,13 +10,63 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
 import '../../../../shared/widgets/neon_button.dart';
 
-class ReceiptDialog extends StatelessWidget {
+class ReceiptDialog extends StatefulWidget {
   final SessionReceiptData receiptData;
 
   const ReceiptDialog({super.key, required this.receiptData});
 
   @override
+  State<ReceiptDialog> createState() => _ReceiptDialogState();
+}
+
+class _ReceiptDialogState extends State<ReceiptDialog> {
+  final GlobalKey _repaintKey = GlobalKey();
+  bool _isSharing = false;
+
+  Future<void> _shareReceiptImage() async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+
+    try {
+      final boundary = _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw Exception('Unable to locate receipt boundary');
+      }
+
+      // Render image at 3.0 pixelRatio for crisp print/retina resolution
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw Exception('Failed to generate PNG image data');
+      }
+      final Uint8List pngBytes = byteData.buffer.asUint8List();
+
+      final isPaid = widget.receiptData.paymentStatus.toUpperCase() == AppConstants.paymentPaid;
+      await ReceiptService.shareReceiptAsImage(
+        imageBytes: pngBytes,
+        sessionId: widget.receiptData.sessionId,
+        isPaid: isPaid,
+      );
+    } catch (e) {
+      debugPrint('Error sharing receipt image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share image receipt: $e'),
+            backgroundColor: AppColors.occupied,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSharing = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final receiptData = widget.receiptData;
     final isPaid = receiptData.paymentStatus.toUpperCase() == AppConstants.paymentPaid;
     final shortId = receiptData.sessionId.length > 8
         ? receiptData.sessionId.substring(0, 8).toUpperCase()
@@ -60,14 +113,16 @@ class ReceiptDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Receipt Ticket Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                child: Column(
+              RepaintBoundary(
+                key: _repaintKey,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Brand Header
@@ -315,9 +370,22 @@ class ReceiptDialog extends StatelessWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(
+                        '🎮 Level Up & Game On! 🚀',
+                        style: GoogleFonts.orbitron(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ),
               const SizedBox(height: 16),
 
               // Actions
@@ -325,9 +393,15 @@ class ReceiptDialog extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.share, size: 16, color: AppColors.primary),
+                      icon: _isSharing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            )
+                          : const Icon(Icons.share, size: 16, color: AppColors.primary),
                       label: Text(
-                        'SHARE',
+                        _isSharing ? 'SHARING...' : 'SHARE',
                         style: GoogleFonts.rajdhani(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -339,7 +413,7 @@ class ReceiptDialog extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      onPressed: () => ReceiptService.shareReceipt(receiptData),
+                      onPressed: _isSharing ? null : _shareReceiptImage,
                     ),
                   ),
                   const SizedBox(width: 12),

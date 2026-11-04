@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/time_formatter.dart';
@@ -140,7 +142,7 @@ class ReceiptService {
     return buffer.toString();
   }
 
-  /// Triggers the native platform share sheet using share_plus
+  /// Triggers the native platform share sheet using share_plus with a plain-text receipt
   static Future<void> shareReceipt(
     SessionReceiptData data, {
     String? customStoreName,
@@ -163,6 +165,38 @@ class ReceiptService {
       ShareParams(
         text: text,
         subject: 'atom Gaming Receipt #$shortId',
+      ),
+    );
+  }
+
+  /// Saves rendered receipt image bytes to a temporary PNG file and triggers
+  /// the native platform share sheet along with a warm, authentic thank-you message.
+  static Future<void> shareReceiptAsImage({
+    required List<int> imageBytes,
+    required String sessionId,
+    required bool isPaid,
+    String? customStoreName,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final shortId = sessionId.length > 8
+        ? sessionId.substring(0, 8).toUpperCase()
+        : sessionId.toUpperCase();
+    final file = File('${tempDir.path}/atom_receipt_$shortId.png');
+    await file.writeAsBytes(imageBytes);
+
+    final effectiveStoreName = customStoreName?.trim().isNotEmpty == true
+        ? customStoreName!.trim()
+        : storeName;
+
+    final thankfulMessage = isPaid
+        ? "Thank you for gaming with us at $effectiveStoreName! 🎮✨\nHere is your official session receipt (#$shortId).\nLevel Up & Game On! 🚀"
+        : "Thank you for visiting $effectiveStoreName! 🎮\nHere is your session bill (#$shortId).\nKindly settle the pending cash balance at the front desk.\nLevel Up & Game On! ✨";
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: thankfulMessage,
+        subject: '$effectiveStoreName Receipt #$shortId',
       ),
     );
   }
