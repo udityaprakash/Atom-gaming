@@ -38,6 +38,42 @@ class UnpaidSessionItem {
   });
 }
 
+class HistoricalSessionItem {
+  final Session session;
+  final Customer? customer;
+  final List<SessionSegment> segments;
+  final List<Room> rooms;
+  final Payment? payment;
+  final int extensionCount;
+
+  const HistoricalSessionItem({
+    required this.session,
+    this.customer,
+    required this.segments,
+    required this.rooms,
+    this.payment,
+    this.extensionCount = 0,
+  });
+
+  String get roomDisplay {
+    if (rooms.isEmpty) return 'Gaming Room';
+    if (rooms.length == 1) return '${rooms.first.roomName} (${rooms.first.equipmentType})';
+    return rooms.map((r) => r.roomName).join(' ➔ ');
+  }
+}
+
+class DetailedSessionTimeline {
+  final HistoricalSessionItem sessionItem;
+  final List<SessionEvent> events;
+  final List<SessionExtension> extensions;
+
+  const DetailedSessionTimeline({
+    required this.sessionItem,
+    required this.events,
+    required this.extensions,
+  });
+}
+
 class DashboardStats {
   final int totalRooms;
   final int availableRooms;
@@ -946,5 +982,125 @@ class SessionRepository {
         todayUnpaidDues: todayUnpaidDues,
       );
     });
+  }
+
+  /// Streams completed sessions for permanent history with multi-faceted filtering
+  Stream<List<HistoricalSessionItem>> watchSessionHistory({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? paymentStatus, // ALL, PAID, UNPAID
+    String? roomId,
+    String? searchQuery,
+  }) {
+    final query = _db.select(_db.sessions).join([
+      leftOuterJoin(_db.customers, _db.customers.id.equalsExp(_db.sessions.customerId)),
+    ])..where(_db.sessions.status.equals(AppConstants.sessionCompleted));
+
+    if (startDate != null) {
+      query.where(_db.sessions.startedAt.isBiggerOrEqualValue(startDate));
+    }
+    if (endDate != null) {
+      query.where(_db.sessions.startedAt.isSmallerOrEqualValue(endDate));
+    }
+    if (paymentStatus != null && paymentStatus != 'ALL') {
+      query.where(_db.sessions.paymentStatus.equals(paymentStatus));
+    }
+
+    query.orderBy([OrderingTerm(expression: _db.sessions.startedAt, mode: OrderingMode.desc)]);
+
+    return query.watch().asyncMap((rows) async {
+      final list = <HistoricalSessionItem>[];
+      for (final row in rows) {
+        final session = row.readTable(_db.sessions);
+        final customer = row.readTableOrNull(_db.customers);
+
+        // Fetch segments
+        final segments = await (_db.select(_db.sessionSegments)
+              ..where((t) => t.sessionId.equals(session.id))
+              ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.asc)]))
+            .get();
+
+        // Room filter check
+        if (roomId != null && !segments.any((s) => s.roomId == roomId)) {
+          continue;
+        }
+
+        // Search query filter (customer name, customer phone, session ID)
+        if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+          final q = searchQuery.trim().toLowerCase();
+          final matchesId = session.id.toLowerCase().contains(q);
+          final matchesCustomer = customer != null &&
+              (customer.name.toLowerCase().contains(q) || (customer.phone?.contains(q) ?? false));
+          if (!matchesId && !matchesCustomer) {
+            continue;
+          }
+        }
+
+        // Fetch rooms for segments
+        final rooms = <Room>[];
+        for (final seg in segments) {
+          final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(seg.roomId))).getSingleOrNull();
+          if (room != null && !rooms.any((r) => r.id == room.id)) {
+            rooms.add(room);
+          }
+        }
+
+        // Fetch payment
+        final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(session.id))).getSingleOrNull();
+
+        // Fetch extensions count
+        final extensions = await (_db.select(_db.sessionExtensions)..where((t) => t.sessionId.equals(session.id))).get();
+
+        list.add(HistoricalSessionItem(
+          session: session,
+          customer: customer,
+          segments: segments,
+          rooms: rooms,
+          payment: payment,
+          extensionCount: extensions.length,
+        ));
+      }
+      return list;
+    });
+  }
+
+  /// Builds complete chronological audit timeline for a session
+  Future<DetailedSessionTimeline> getSessionTimeline(String sessionId) async {
+    final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingle();
+    final customer = session.customerId != null
+        ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
+        : null;
+
+    final segments = await (_db.select(_db.sessionSegments)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.asc)]))
+        .get();
+
+    final rooms = <Room>[];
+    for (final seg in segments) {
+      final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(seg.roomId))).getSingleOrNull();
+      if (room != null && !rooms.any((r) => r.id == room.id)) {
+        rooms.add(room);
+      }
+    }
+
+    final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+    final extensions = await getSessionExtensions(sessionId);
+    final events = await getSessionEvents(sessionId);
+
+    final item = HistoricalSessionItem(
+      session: session,
+      customer: customer,
+      segments: segments,
+      rooms: rooms,
+      payment: payment,
+      extensionCount: extensions.length,
+    );
+
+    return DetailedSessionTimeline(
+      sessionItem: item,
+      events: events,
+      extensions: extensions,
+    );
   }
 }

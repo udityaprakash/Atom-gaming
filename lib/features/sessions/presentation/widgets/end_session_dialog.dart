@@ -328,8 +328,9 @@ class _EndSessionDialogState extends ConsumerState<EndSessionDialog> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         _buildDisabledMethod('UPI'),
                         _buildDisabledMethod('Card / POS'),
@@ -355,19 +356,22 @@ class _EndSessionDialogState extends ConsumerState<EndSessionDialog> {
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.cardBorder),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 ),
-                child: Text(
-                  'CANCEL',
-                  style: GoogleFonts.rajdhani(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textSecondary,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'CANCEL',
+                    style: GoogleFonts.rajdhani(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
 
             // Unpaid Button
             Expanded(
@@ -376,19 +380,22 @@ class _EndSessionDialogState extends ConsumerState<EndSessionDialog> {
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.occupied),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 ),
-                child: Text(
-                  'MARK UNPAID',
-                  style: GoogleFonts.rajdhani(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.occupied,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'MARK UNPAID',
+                    style: GoogleFonts.rajdhani(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.occupied,
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
 
             // Paid Button
             Expanded(
@@ -397,7 +404,7 @@ class _EndSessionDialogState extends ConsumerState<EndSessionDialog> {
                 label: 'PAID (CASH)',
                 icon: Icons.payments,
                 color: AppColors.available,
-                height: 42,
+                height: 40,
                 fontSize: 12,
                 onPressed: _isSubmitting ? null : () => _handleEnd(AppConstants.paymentPaid),
               ),

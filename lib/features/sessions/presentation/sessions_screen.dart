@@ -9,10 +9,12 @@ import '../../../shared/widgets/glass_card.dart';
 import '../../../shared/widgets/neon_button.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../billing/presentation/widgets/receipt_dialog.dart';
+import '../../rooms/providers/room_provider.dart';
 import '../data/session_repository.dart';
 import '../providers/session_provider.dart';
 import 'widgets/end_session_dialog.dart';
 import 'widgets/extend_session_sheet.dart';
+import 'widgets/session_timeline_dialog.dart';
 import 'widgets/transfer_room_dialog.dart';
 
 class SessionsScreen extends ConsumerWidget {
@@ -33,7 +35,7 @@ class SessionsScreen extends ConsumerWidget {
     );
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -49,14 +51,14 @@ class SessionsScreen extends ConsumerWidget {
             indicatorWeight: 3,
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textMuted,
-            labelStyle: GoogleFonts.orbitron(fontSize: 11, fontWeight: FontWeight.bold),
+            labelStyle: GoogleFonts.orbitron(fontSize: 10, fontWeight: FontWeight.bold),
             tabs: [
               Tab(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.timer_outlined, size: 16),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.timer_outlined, size: 14),
+                    const SizedBox(width: 4),
                     Text('ACTIVE ($activeCount)'),
                   ],
                 ),
@@ -67,16 +69,26 @@ class SessionsScreen extends ConsumerWidget {
                   children: [
                     Icon(
                       Icons.money_off,
-                      size: 16,
+                      size: 14,
                       color: unpaidCount > 0 ? AppColors.occupied : AppColors.textMuted,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     Text(
-                      'UNPAID DUES ($unpaidCount)',
+                      'UNPAID ($unpaidCount)',
                       style: TextStyle(
                         color: unpaidCount > 0 ? AppColors.occupied : null,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.history, size: 14),
+                    SizedBox(width: 4),
+                    Text('HISTORY'),
                   ],
                 ),
               ),
@@ -90,6 +102,9 @@ class SessionsScreen extends ConsumerWidget {
 
             // Tab 2: Unpaid Sessions
             _buildUnpaidSessionsTab(context, ref, unpaidSessionsAsync),
+
+            // Tab 3: Session History
+            _buildHistoryTab(context, ref),
           ],
         ),
       ),
@@ -187,6 +202,392 @@ class SessionsScreen extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error: $err')),
+    );
+  }
+
+  Widget _buildHistoryTab(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(sessionHistoryStreamProvider);
+    final datePreset = ref.watch(sessionHistoryDatePresetProvider);
+    final paymentStatus = ref.watch(sessionHistoryPaymentStatusProvider);
+    final selectedRoomId = ref.watch(sessionHistoryRoomIdProvider);
+    final allRoomsAsync = ref.watch(allRoomsStreamProvider);
+
+    return Column(
+      children: [
+        // Filter Header
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          color: AppColors.surface,
+          child: Column(
+            children: [
+              // Search Input
+              TextField(
+                onChanged: (val) {
+                  ref.read(sessionHistorySearchQueryProvider.notifier).setQuery(val);
+                },
+                style: GoogleFonts.rajdhani(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search customer name or session ID...',
+                  hintStyle: GoogleFonts.rajdhani(color: AppColors.textMuted),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.cardBorder),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Date Preset Filter Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip(
+                      label: 'All Time',
+                      isSelected: datePreset == 'ALL',
+                      onSelected: () => ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('ALL'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterChip(
+                      label: 'Today',
+                      isSelected: datePreset == 'TODAY',
+                      onSelected: () => ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('TODAY'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterChip(
+                      label: 'Yesterday',
+                      isSelected: datePreset == 'YESTERDAY',
+                      onSelected: () => ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('YESTERDAY'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterChip(
+                      label: 'This Week',
+                      isSelected: datePreset == 'THIS_WEEK',
+                      onSelected: () => ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('THIS_WEEK'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterChip(
+                      label: 'This Month',
+                      isSelected: datePreset == 'THIS_MONTH',
+                      onSelected: () => ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('THIS_MONTH'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterChip(
+                      label: 'Custom Range',
+                      isSelected: datePreset == 'CUSTOM',
+                      onSelected: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2025),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+                        if (picked != null) {
+                          ref.read(sessionHistoryCustomRangeProvider.notifier).setRange(picked);
+                          ref.read(sessionHistoryDatePresetProvider.notifier).setPreset('CUSTOM');
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Secondary Filters: Payment Status & Room selector
+              Row(
+                children: [
+                  // Payment Status Chip
+                  _buildMiniChip(
+                    label: 'Status: $paymentStatus',
+                    onTap: () {
+                      final next = paymentStatus == 'ALL'
+                          ? 'PAID'
+                          : paymentStatus == 'PAID'
+                              ? 'UNPAID'
+                              : 'ALL';
+                      ref.read(sessionHistoryPaymentStatusProvider.notifier).setStatus(next);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Room Selector
+                  Expanded(
+                    child: allRoomsAsync.maybeWhen(
+                      data: (rooms) => DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: selectedRoomId,
+                          isDense: true,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surfaceElevated,
+                          hint: Text('All Rooms', style: GoogleFonts.rajdhani(color: AppColors.textMuted)),
+                          items: [
+                            DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('All Rooms', style: GoogleFonts.rajdhani(color: AppColors.textPrimary)),
+                            ),
+                            ...rooms.map(
+                              (r) => DropdownMenuItem<String?>(
+                                value: r.id,
+                                child: Text(r.roomName, style: GoogleFonts.rajdhani(color: AppColors.textPrimary)),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            ref.read(sessionHistoryRoomIdProvider.notifier).setRoomId(val);
+                          },
+                        ),
+                      ),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // History Content
+        Expanded(
+          child: historyAsync.when(
+            data: (history) {
+              if (history.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.history_toggle_off, size: 48, color: AppColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No Historical Sessions',
+                        style: GoogleFonts.orbitron(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Completed sessions will automatically appear here.',
+                        style: GoogleFonts.rajdhani(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: history.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final item = history[index];
+                  return _buildHistoryCard(context, ref, item);
+                },
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => Center(child: Text('Error: $err')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelected(),
+      labelStyle: GoogleFonts.rajdhani(
+        fontSize: 12,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+        color: isSelected ? Colors.white : AppColors.textMuted,
+      ),
+      selectedColor: AppColors.primary,
+      backgroundColor: AppColors.background,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: isSelected ? AppColors.primary : AppColors.cardBorder),
+      ),
+    );
+  }
+
+  Widget _buildMiniChip({required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: GoogleFonts.rajdhani(fontSize: 11, color: AppColors.textSecondary)),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 16, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard(BuildContext context, WidgetRef ref, HistoricalSessionItem item) {
+    final s = item.session;
+    final isPaid = s.paymentStatus == AppConstants.paymentPaid;
+    final shortId = s.id.length > 8 ? s.id.substring(0, 8).toUpperCase() : s.id.toUpperCase();
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (_) => SessionTimelineDialog(sessionId: s.id),
+        );
+      },
+      child: GlassCard(
+        padding: const EdgeInsets.all(12),
+        borderColor: isPaid ? AppColors.cardBorder : AppColors.occupied.withValues(alpha: 0.5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: ID, Date, Status
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '#$shortId',
+                      style: GoogleFonts.orbitron(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      TimeFormatter.formatDate(s.startedAt),
+                      style: GoogleFonts.rajdhani(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+                StatusBadge(status: s.paymentStatus),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            // Room and Customer Info
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.roomDisplay,
+                      style: GoogleFonts.orbitron(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Text(
+                      'Customer: ${item.customer?.name ?? "Walk-in Guest"}',
+                      style: GoogleFonts.rajdhani(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      CurrencyFormatter.format(s.totalAmount),
+                      style: GoogleFonts.orbitron(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isPaid ? AppColors.available : AppColors.occupied,
+                      ),
+                    ),
+                    Text(
+                      TimeFormatter.formatDurationHuman(Duration(seconds: s.totalDurationSeconds)),
+                      style: GoogleFonts.rajdhani(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            if (item.extensionCount > 0) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.more_time, size: 12, color: AppColors.endingSoon),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${item.extensionCount} extension(s) logged',
+                    style: GoogleFonts.rajdhani(fontSize: 11, color: AppColors.endingSoon),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 8),
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 6),
+
+            // Actions row: Timeline & Receipt
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.history_edu, size: 14, color: AppColors.textSecondary),
+                  label: Text('TIMELINE', style: GoogleFonts.rajdhani(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.textSecondary,
+                  ),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => SessionTimelineDialog(sessionId: s.id),
+                    );
+                  },
+                ),
+                const SizedBox(width: 6),
+                TextButton.icon(
+                  icon: const Icon(Icons.receipt_long, size: 14, color: AppColors.primary),
+                  label: Text('RECEIPT', style: GoogleFonts.rajdhani(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.primary,
+                  ),
+                  onPressed: () async {
+                    final repo = ref.read(sessionRepositoryProvider);
+                    final receipt = await repo.getSessionReceiptData(s.id);
+                    if (context.mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (_) => ReceiptDialog(receiptData: receipt),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

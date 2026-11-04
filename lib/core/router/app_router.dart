@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
+import '../../features/customers/presentation/customers_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/rooms/presentation/rooms_screen.dart';
 import '../../features/sessions/presentation/sessions_screen.dart';
@@ -13,6 +14,11 @@ final appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/',
   routes: [
+    GoRoute(
+      path: '/customers',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const CustomersScreen(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return AppScaffold(navigationShell: navigationShell);

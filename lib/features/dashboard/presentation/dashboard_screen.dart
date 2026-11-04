@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../rooms/presentation/widgets/add_edit_room_dialog.dart';
@@ -55,6 +56,11 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.people_outline, color: AppColors.primary),
+            tooltip: 'Customer Directory',
+            onPressed: () => context.push('/customers'),
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: AppColors.available),
             tooltip: 'Add New Room',
