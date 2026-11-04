@@ -3,9 +3,12 @@ import 'package:go_router/go_router.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/customers/presentation/customers_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/reservations/presentation/reservations_screen.dart';
 import '../../features/rooms/presentation/rooms_screen.dart';
 import '../../features/sessions/presentation/sessions_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/settings/presentation/business_profile_screen.dart';
+import '../../features/settings/presentation/data_management_screen.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -18,6 +21,21 @@ final appRouter = GoRouter(
       path: '/customers',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const CustomersScreen(),
+    ),
+    GoRoute(
+      path: '/reservations',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const ReservationsScreen(),
+    ),
+    GoRoute(
+      path: '/backup',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const DataManagementScreen(),
+    ),
+    GoRoute(
+      path: '/business-profile',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const BusinessProfileScreen(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

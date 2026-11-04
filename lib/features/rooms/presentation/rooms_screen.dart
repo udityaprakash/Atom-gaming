@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/services/security_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/glass_card.dart';
+import '../../../shared/widgets/neon_button.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../providers/room_provider.dart';
 import 'widgets/add_edit_room_dialog.dart';
@@ -150,13 +152,7 @@ class RoomsScreen extends ConsumerWidget {
               // Maintenance toggle
               if (room.status != AppConstants.statusOccupied)
                 TextButton.icon(
-                  onPressed: () async {
-                    final repo = ref.read(roomRepositoryProvider);
-                    final newStatus = room.status == AppConstants.statusMaintenance
-                        ? AppConstants.statusAvailable
-                        : AppConstants.statusMaintenance;
-                    await repo.setRoomStatus(room.id, newStatus);
-                  },
+                  onPressed: () => _toggleMaintenance(context, ref, room),
                   icon: Icon(
                     room.status == AppConstants.statusMaintenance
                         ? Icons.check_circle_outline
@@ -208,6 +204,93 @@ class RoomsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _toggleMaintenance(BuildContext context, WidgetRef ref, Room room) async {
+    final repo = ref.read(roomRepositoryProvider);
+    if (room.status == AppConstants.statusMaintenance) {
+      await repo.restoreRoomAvailability(room.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${room.roomName} is now AVAILABLE'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Prompt for reason notes
+    final noteController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.cardBorder),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.build, color: AppColors.maintenance),
+            const SizedBox(width: 8),
+            Text(
+              'Set Under Maintenance',
+              style: GoogleFonts.orbitron(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Mark "${room.roomName}" as temporarily unavailable. Add a note explaining the maintenance reason:',
+              style: GoogleFonts.rajdhani(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              style: GoogleFonts.rajdhani(fontSize: 14, color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'e.g. Controller repair, software update...',
+                filled: true,
+                fillColor: AppColors.surfaceElevated,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
+          NeonButton(
+            label: 'MARK MAINTENANCE',
+            color: AppColors.maintenance,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final note = noteController.text.trim();
+      await repo.markRoomMaintenance(
+        roomId: room.id,
+        reasonNotes: note.isNotEmpty ? note : 'Scheduled Maintenance',
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${room.roomName} marked under maintenance'),
+            backgroundColor: AppColors.maintenance,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDeleteRoom(BuildContext context, WidgetRef ref, Room room) async {
     final repo = ref.read(roomRepositoryProvider);
     final hasDeps = await repo.hasDependencies(room.id);
@@ -236,27 +319,13 @@ class RoomsScreen extends ConsumerWidget {
     }
 
     if (context.mounted) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: Text('Delete ${room.roomName}?'),
-          content: Text(
-            'Are you sure you want to permanently delete this room?',
-            style: GoogleFonts.rajdhani(color: AppColors.textSecondary),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.occupied),
-              child: const Text('DELETE'),
-            ),
-          ],
-        ),
+      final security = ref.read(securityServiceProvider);
+      final confirmed = await security.authenticateAction(
+        context,
+        title: 'Delete Room?',
+        message: 'Are you sure you want to permanently delete "${room.roomName}"? This action cannot be undone.',
+        confirmLabel: 'DELETE ROOM',
+        isDestructive: true,
       );
 
       if (confirmed == true) {

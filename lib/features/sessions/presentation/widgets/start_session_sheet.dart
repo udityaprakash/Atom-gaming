@@ -11,8 +11,19 @@ import '../../providers/session_provider.dart';
 
 class StartSessionSheet extends ConsumerStatefulWidget {
   final Room room;
+  final String? prefillCustomerName;
+  final String? prefillPhone;
+  final int? prefillDurationMinutes;
+  final VoidCallback? onSessionStarted;
 
-  const StartSessionSheet({super.key, required this.room});
+  const StartSessionSheet({
+    super.key,
+    required this.room,
+    this.prefillCustomerName,
+    this.prefillPhone,
+    this.prefillDurationMinutes,
+    this.onSessionStarted,
+  });
 
   @override
   ConsumerState<StartSessionSheet> createState() => _StartSessionSheetState();
@@ -34,6 +45,22 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
   void initState() {
     super.initState();
     _controllerCount = widget.room.controllerCount;
+    if (widget.prefillCustomerName != null) {
+      _nameController.text = widget.prefillCustomerName!;
+    }
+    if (widget.prefillPhone != null) {
+      _phoneController.text = widget.prefillPhone!;
+    }
+    if (widget.prefillDurationMinutes != null) {
+      final mins = widget.prefillDurationMinutes!;
+      if (AppConstants.durationPresets.contains(mins)) {
+        _selectedDurationMinutes = mins;
+      } else {
+        _isCustomDuration = true;
+        _customHours = mins ~/ 60;
+        _customMinutes = mins % 60;
+      }
+    }
   }
 
   @override
@@ -388,6 +415,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
       );
 
       if (mounted) {
+        widget.onSessionStarted?.call();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

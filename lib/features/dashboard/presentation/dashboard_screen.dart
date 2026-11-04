@@ -57,6 +57,11 @@ class DashboardScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.event_available_outlined, color: AppColors.accent),
+            tooltip: 'Advance Reservations',
+            onPressed: () => context.push('/reservations'),
+          ),
+          IconButton(
             icon: const Icon(Icons.people_outline, color: AppColors.primary),
             tooltip: 'Customer Directory',
             onPressed: () => context.push('/customers'),

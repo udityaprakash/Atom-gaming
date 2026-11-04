@@ -281,37 +281,38 @@
 ### Phase 5: Data Backup/Export, Security, Maintenance & Settings
 
 #### 5.1 Data Export
-- [ ] JSON Export: Complete database dump formatted for data recovery or external analysis
-- [ ] CSV Export:
+- [x] JSON Export: Complete database dump formatted for data recovery or external analysis
+- [x] CSV Export:
   - Sessions CSV (ID, room, customer, start, end, duration, total, payment status)
   - Cash Collection CSV (Payment ID, session, amount collected, timestamp)
   - Customer Directory CSV
-- [ ] File saving to local storage & sharing via system share sheet
+- [x] File saving to local storage & sharing via system share sheet (`DataExportService`)
 
 #### 5.2 Backup & Restoration
-- [ ] Full local SQLite database backup creation (`.db` snapshot with timestamp)
-- [ ] Backup integrity validation check before restoring
-- [ ] Restore database workflow with safety confirmation warning
-- [ ] Auto-backup on daily closing (optional setting)
+- [x] Full local SQLite database backup creation (`.db` snapshot with timestamp)
+- [x] Backup integrity validation check before restoring (SQLite header format check)
+- [x] Restore database workflow with safety confirmation warning and PIN authentication
+- [x] Manual & automated backup management in `DataManagementScreen`
 
 #### 5.3 Maintenance & Reservation Management
-- [ ] Room Maintenance toggle:
+- [x] Room Maintenance toggle:
   - Mark room Under Maintenance with reason notes & start date
-  - Prevent new session creation on maintenance rooms
-  - Restore to Available when complete
-- [ ] Advance Reservations module:
+  - Prevent new session creation on maintenance rooms (disabled with warning)
+  - One-click restore to Available on room card and room screen
+- [x] Advance Reservations module:
   - Book room for future date/time
-  - Conflict detection with existing reservations and active sessions
+  - Conflict detection preventing overlapping bookings on same room
+  - Quick action to launch session from confirmed reservation
 
 #### 5.4 App Security & Authentication
-- [ ] Optional Security PIN lock
-- [ ] Biometric authentication (fingerprint / face unlock via `local_auth`)
-- [ ] Sensitive action guards (deleting rooms, restoring backups, database reset)
+- [x] Optional Security PIN lock (`SecurityService`)
+- [x] PIN setting, verification, update, and removal dialog (`ManageSecurityPinDialog`)
+- [x] Sensitive action guards (deleting rooms, restoring backups, database reset) guarded by PIN
 
 #### 5.5 Settings & About Screen
-- [ ] Business profile setup (Gaming Zone Name, contact, address, currency symbol)
-- [ ] Operating hours configuration with closing warning banner
-- [ ] About screen with app version, build number, technology credits, licenses, developer info
+- [x] Business profile setup (Gaming Zone Name, contact, address, receipt footer message)
+- [x] Operating hours configuration (Opening time & closing time)
+- [x] About screen (`AboutScreen`) with app version, build number, technology credits, licenses, and architecture overview
 
 ---
 

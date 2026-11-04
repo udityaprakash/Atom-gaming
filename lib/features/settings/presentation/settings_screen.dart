@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/security_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../reservations/presentation/reservations_screen.dart';
+import 'about_screen.dart';
+import 'business_profile_screen.dart';
+import 'data_management_screen.dart';
 import 'notification_settings_screen.dart';
+import 'widgets/manage_security_pin_dialog.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'SETTINGS & ABOUT',
+          'SETTINGS & SYSTEM',
           style: GoogleFonts.orbitron(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -24,55 +31,68 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // App Banner
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AboutScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                    ),
+                    child: const Icon(Icons.sports_esports, color: AppColors.primary, size: 32),
                   ),
-                  child: const Icon(Icons.sports_esports, color: AppColors.primary, size: 32),
-                ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppConstants.appName,
-                      style: GoogleFonts.orbitron(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppConstants.appName,
+                          style: GoogleFonts.orbitron(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Version ${AppConstants.appVersion} • Offline Local-first POS',
+                          style: GoogleFonts.rajdhani(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Version ${AppConstants.appVersion} • Offline Local-first',
-                      style: GoogleFonts.rajdhani(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textMuted),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
 
+          // Business & Security Section
           Text(
-            'SYSTEM & MODULES',
+            'BUSINESS & SECURITY',
             style: GoogleFonts.orbitron(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               color: AppColors.textMuted,
               letterSpacing: 0.8,
@@ -82,17 +102,70 @@ class SettingsScreen extends StatelessWidget {
 
           _buildTile(
             context: context,
-            title: 'Cash-Only Ledger',
-            subtitle: 'Digital & UPI payments reserved for future release',
-            icon: Icons.payments_outlined,
-            trailingText: 'Active',
+            title: 'Business Profile & Receipts',
+            subtitle: 'Store name, address, contact phone, and operating hours',
+            icon: Icons.storefront_outlined,
+            trailingText: 'Configure',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BusinessProfileScreen()),
+              );
+            },
           ),
           _buildTile(
             context: context,
-            title: 'SQLite Drift Database',
-            subtitle: 'Local-first persistent offline storage',
-            icon: Icons.storage_outlined,
-            trailingText: 'Ready',
+            title: 'Security PIN Protection',
+            subtitle: 'Guard database restores, data resets, and room deletions',
+            icon: Icons.shield_outlined,
+            trailingText: 'Manage',
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (_) => const ManageSecurityPinDialog(),
+              );
+            },
+          ),
+
+          const SizedBox(height: 20),
+
+          // Operations & Booking Section
+          Text(
+            'OPERATIONS & DATA',
+            style: GoogleFonts.orbitron(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMuted,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          _buildTile(
+            context: context,
+            title: 'Advance Console Reservations',
+            subtitle: 'Slot booking with automated conflict checking',
+            icon: Icons.event_available_outlined,
+            trailingText: 'Manage',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReservationsScreen()),
+              );
+            },
+          ),
+          _buildTile(
+            context: context,
+            title: 'Database Backup & JSON/CSV Export',
+            subtitle: 'Full offline data ownership, SQLite snapshots, and CSV files',
+            icon: Icons.cloud_download_outlined,
+            trailingText: 'Open',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DataManagementScreen()),
+              );
+            },
           ),
           _buildTile(
             context: context,
@@ -107,12 +180,47 @@ class SettingsScreen extends StatelessWidget {
               );
             },
           ),
+
+          const SizedBox(height: 20),
+
+          // System Info Section
+          Text(
+            'SYSTEM ARCHITECTURE',
+            style: GoogleFonts.orbitron(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textMuted,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+
           _buildTile(
             context: context,
-            title: 'Database Backup & JSON/CSV Export',
-            subtitle: 'Full offline data ownership & snapshots',
-            icon: Icons.cloud_download_outlined,
-            trailingText: 'Phase 5',
+            title: 'Cash-Only Ledger',
+            subtitle: 'Digital & UPI payments reserved for future release (v1.2+)',
+            icon: Icons.payments_outlined,
+            trailingText: 'Active',
+          ),
+          _buildTile(
+            context: context,
+            title: 'SQLite Drift Database',
+            subtitle: 'atom.sqlite local encrypted-ready persistent storage',
+            icon: Icons.storage_outlined,
+            trailingText: 'Ready',
+          ),
+          _buildTile(
+            context: context,
+            title: 'About atom & Licenses',
+            subtitle: 'Architecture philosophy and open source credits',
+            icon: Icons.info_outline,
+            trailingText: 'View',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AboutScreen()),
+              );
+            },
           ),
         ],
       ),

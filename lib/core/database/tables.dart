@@ -114,3 +114,19 @@ class AppSettings extends Table {
   @override
   Set<Column> get primaryKey => {key};
 }
+
+@DataClassName('Reservation')
+class Reservations extends Table {
+  TextColumn get id => text()();
+  TextColumn get roomId => text().references(Rooms, #id)();
+  TextColumn get customerName => text()();
+  TextColumn get customerPhone => text().nullable()();
+  DateTimeColumn get reservedFor => dateTime()();
+  IntColumn get durationMinutes => integer()();
+  TextColumn get status => text().withDefault(const Constant('CONFIRMED'))(); // CONFIRMED, CANCELLED, COMPLETED
+  TextColumn get notes => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

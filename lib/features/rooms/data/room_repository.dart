@@ -87,6 +87,32 @@ class RoomRepository {
     );
   }
 
+  /// Mark a room under maintenance with reason notes
+  Future<void> markRoomMaintenance({
+    required String roomId,
+    required String reasonNotes,
+  }) async {
+    final now = DateTime.now();
+    await (_db.update(_db.rooms)..where((t) => t.id.equals(roomId))).write(
+      RoomsCompanion(
+        status: const Value(AppConstants.statusMaintenance),
+        description: Value('Maintenance: $reasonNotes'),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  /// Restore room back to Available status
+  Future<void> restoreRoomAvailability(String roomId) async {
+    final now = DateTime.now();
+    await (_db.update(_db.rooms)..where((t) => t.id.equals(roomId))).write(
+      RoomsCompanion(
+        status: const Value(AppConstants.statusAvailable),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
   Future<bool> hasDependencies(String roomId) async {
     final segments = await (_db.select(_db.sessionSegments)
           ..where((t) => t.roomId.equals(roomId))

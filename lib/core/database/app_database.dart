@@ -16,6 +16,7 @@ part 'app_database.g.dart';
   Payments,
   SessionEvents,
   AppSettings,
+  Reservations,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());

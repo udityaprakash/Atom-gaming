@@ -51,7 +51,17 @@ class ReceiptService {
   static const String storeContact = '+91 98765 43210';
 
   /// Generates a clean, monospaced plain-text receipt suitable for SMS, WhatsApp, and thermal printing
-  static String formatReceiptText(SessionReceiptData data) {
+  static String formatReceiptText(
+    SessionReceiptData data, {
+    String? customStoreName,
+    String? customStoreAddress,
+    String? customStoreContact,
+    String? customFooterMessage,
+  }) {
+    final effectiveStoreName = customStoreName?.trim().isNotEmpty == true ? customStoreName!.trim() : storeName;
+    final effectiveAddress = customStoreAddress?.trim().isNotEmpty == true ? customStoreAddress!.trim() : storeAddress;
+    final effectiveContact = customStoreContact?.trim().isNotEmpty == true ? customStoreContact!.trim() : storeContact;
+
     final dateFormatter = DateFormat('dd MMM yyyy, hh:mm a');
     final timeOnlyFormatter = DateFormat('hh:mm a');
     final shortId = data.sessionId.length > 8
@@ -60,10 +70,10 @@ class ReceiptService {
 
     final buffer = StringBuffer();
     buffer.writeln('========================================');
-    buffer.writeln('         $storeName');
+    buffer.writeln('         $effectiveStoreName');
     buffer.writeln('    $storeTagline');
-    buffer.writeln('       $storeAddress');
-    buffer.writeln('          Ph: $storeContact');
+    buffer.writeln('       $effectiveAddress');
+    buffer.writeln('          Ph: $effectiveContact');
     buffer.writeln('========================================');
     buffer.writeln('RECEIPT / CASH INVOICE');
     buffer.writeln('Session ID : #$shortId');
@@ -119,17 +129,32 @@ class ReceiptService {
       buffer.writeln('Notes          : ${data.notes}');
     }
 
+    final effectiveFooter = customFooterMessage?.trim().isNotEmpty == true
+        ? customFooterMessage!.trim()
+        : 'Thank you for playing with us!\n          Level Up & Game On!';
+
     buffer.writeln('========================================');
-    buffer.writeln('      Thank you for playing with us!');
-    buffer.writeln('          Level Up & Game On!');
+    buffer.writeln('      $effectiveFooter');
     buffer.writeln('========================================');
 
     return buffer.toString();
   }
 
   /// Triggers the native platform share sheet using share_plus
-  static Future<void> shareReceipt(SessionReceiptData data) async {
-    final text = formatReceiptText(data);
+  static Future<void> shareReceipt(
+    SessionReceiptData data, {
+    String? customStoreName,
+    String? customStoreAddress,
+    String? customStoreContact,
+    String? customFooterMessage,
+  }) async {
+    final text = formatReceiptText(
+      data,
+      customStoreName: customStoreName,
+      customStoreAddress: customStoreAddress,
+      customStoreContact: customStoreContact,
+      customFooterMessage: customFooterMessage,
+    );
     final shortId = data.sessionId.length > 8
         ? data.sessionId.substring(0, 8).toUpperCase()
         : data.sessionId.toUpperCase();

@@ -9,6 +9,7 @@ import '../../../../core/utils/time_formatter.dart';
 import '../../../../shared/widgets/glass_card.dart';
 import '../../../../shared/widgets/neon_button.dart';
 import '../../../../shared/widgets/status_badge.dart';
+import '../../../rooms/providers/room_provider.dart';
 import '../../../sessions/data/session_repository.dart';
 import '../../../sessions/presentation/widgets/end_session_dialog.dart';
 import '../../../sessions/presentation/widgets/extend_session_sheet.dart';
@@ -121,7 +122,7 @@ class RoomCard extends ConsumerWidget {
               else if ((isOccupied || isPaused) && activeSession != null)
                 _buildOccupiedBody(context, ref, activeSession)
               else if (isMaintenance)
-                _buildMaintenanceBody()
+                _buildMaintenanceBody(ref)
               else
                 const SizedBox(height: 36),
             ],
@@ -432,9 +433,9 @@ class RoomCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildMaintenanceBody() {
+  Widget _buildMaintenanceBody(WidgetRef ref) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.maintenance.withValues(alpha: 0.08),
@@ -442,14 +443,33 @@ class RoomCard extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.build, size: 16, color: AppColors.maintenance),
-          const SizedBox(height: 4),
+          const Icon(Icons.build, size: 14, color: AppColors.maintenance),
+          const SizedBox(height: 2),
           Text(
-            'UNDER MAINTENANCE',
+            room.description != null && room.description!.startsWith('Maintenance: ')
+                ? room.description!
+                : 'UNDER MAINTENANCE',
             style: GoogleFonts.orbitron(
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.bold,
               color: AppColors.maintenance,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: NeonButton(
+              label: 'RESTORE AVAILABLE',
+              icon: Icons.check_circle_outline,
+              color: AppColors.primary,
+              height: 28,
+              fontSize: 10,
+              onPressed: () async {
+                await ref.read(roomRepositoryProvider).restoreRoomAvailability(room.id);
+              },
             ),
           ),
         ],
