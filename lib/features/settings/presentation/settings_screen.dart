@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/services/security_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/neon_button.dart';
 import '../../reservations/presentation/reservations_screen.dart';
 import 'about_screen.dart';
 import 'business_profile_screen.dart';
 import 'data_management_screen.dart';
 import 'notification_settings_screen.dart';
+import 'widgets/app_update_dialog.dart';
 import 'widgets/manage_security_pin_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -211,6 +214,14 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _buildTile(
             context: context,
+            title: 'Check for Updates',
+            subtitle: 'Check GitHub Releases for the latest version',
+            icon: Icons.system_update_alt_outlined,
+            trailingText: 'Check',
+            onTap: () => _handleCheckForUpdates(context),
+          ),
+          _buildTile(
+            context: context,
             title: 'About atom & Licenses',
             subtitle: 'Architecture philosophy and open source credits',
             icon: Icons.info_outline,
@@ -225,6 +236,67 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleCheckForUpdates(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    try {
+      final info = await AppUpdateService.checkForUpdate();
+      if (context.mounted) {
+        Navigator.pop(context); // close loading dialog
+        if (info.hasUpdate) {
+          AppUpdateDialog.show(context, info);
+        } else {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: AppColors.available, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Up to Date',
+                    style: GoogleFonts.orbitron(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              content: Text(
+                'atom v${AppConstants.appVersion} is currently the latest version available on GitHub.',
+                style: GoogleFonts.rajdhani(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              actions: [
+                NeonButton(
+                  label: 'OK',
+                  color: AppColors.available,
+                  height: 34,
+                  fontSize: 11,
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check for updates: $e'),
+            backgroundColor: AppColors.occupied,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildTile({

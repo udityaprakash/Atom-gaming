@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/neon_button.dart';
+import 'widgets/app_update_dialog.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -77,6 +80,24 @@ class AboutScreen extends StatelessWidget {
                       letterSpacing: 0.8,
                     ),
                   ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.system_update_alt_outlined, size: 16, color: AppColors.primary),
+                  label: Text(
+                    'CHECK FOR UPDATES',
+                    style: GoogleFonts.rajdhani(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _handleCheckForUpdates(context),
                 ),
               ],
             ),
@@ -194,5 +215,66 @@ class AboutScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleCheckForUpdates(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    try {
+      final info = await AppUpdateService.checkForUpdate();
+      if (context.mounted) {
+        Navigator.pop(context); // close loading
+        if (info.hasUpdate) {
+          AppUpdateDialog.show(context, info);
+        } else {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: AppColors.available, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Up to Date',
+                    style: GoogleFonts.orbitron(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              content: Text(
+                'atom v${AppConstants.appVersion} is currently the latest version available on GitHub.',
+                style: GoogleFonts.rajdhani(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              actions: [
+                NeonButton(
+                  label: 'OK',
+                  color: AppColors.available,
+                  height: 34,
+                  fontSize: 11,
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check for updates: $e'),
+            backgroundColor: AppColors.occupied,
+          ),
+        );
+      }
+    }
   }
 }
