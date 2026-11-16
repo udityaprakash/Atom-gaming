@@ -2,7 +2,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'atom';
-  static const String appVersion = '1.1.0';
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.1.0');
   static const String currencySymbol = '₹';
 
   // Room Statuses

@@ -1,8 +1,23 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+
+class NativeFilePicker {
+  static const _channel = MethodChannel('com.example.atom/file_picker');
+
+  /// Opens Android native Storage Access Framework file browser to select a .db backup file
+  static Future<String?> pickBackupFile() async {
+    try {
+      final String? path = await _channel.invokeMethod('pickBackupFile');
+      return path;
+    } catch (e) {
+      return null;
+    }
+  }
+}
 
 class BackupMetadata {
   final String fileName;
@@ -100,6 +115,37 @@ class BackupService {
     final bytes = await stream.first;
     final header = String.fromCharCodes(bytes.take(15));
     return header == 'SQLite format 3';
+  }
+
+  /// Imports an external backup file from any path, validates it, and copies it into local backups
+  static Future<BackupMetadata> importBackupFile(File externalFile) async {
+    final isValid = await validateBackup(externalFile);
+    if (!isValid) {
+      throw Exception('Selected file is not a valid SQLite database backup.');
+    }
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final backupDir = Directory(p.join(docsDir.path, _backupDirName));
+    if (!await backupDir.exists()) {
+      await backupDir.create(recursive: true);
+    }
+
+    final originalName = p.basename(externalFile.path);
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final targetFileName = originalName.startsWith('atom_backup_') && originalName.endsWith('.db')
+        ? originalName
+        : 'atom_backup_imported_$timestamp.db';
+
+    final targetFile = File(p.join(backupDir.path, targetFileName));
+    await externalFile.copy(targetFile.path);
+    final stat = await targetFile.stat();
+
+    return BackupMetadata(
+      fileName: targetFileName,
+      filePath: targetFile.path,
+      fileSizeBytes: stat.size,
+      createdAt: stat.modified,
+    );
   }
 
   /// Restores database from a selected backup file

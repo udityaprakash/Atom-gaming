@@ -151,6 +151,61 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen> {
     }
   }
 
+  Future<void> _importBackupFile() async {
+    try {
+      final selectedPath = await NativeFilePicker.pickBackupFile();
+      if (selectedPath == null) return;
+
+      setState(() => _isProcessing = true);
+      final importedFile = File(selectedPath);
+      final meta = await BackupService.importBackupFile(importedFile);
+      await _loadBackups();
+
+      if (mounted) {
+        final shouldRestore = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Backup File Imported',
+              style: GoogleFonts.orbitron(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
+            content: Text(
+              'Successfully imported "${meta.fileName}" (${meta.formattedSize}).\n\nWould you like to restore this database snapshot now?',
+              style: GoogleFonts.rajdhani(color: AppColors.textPrimary, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('LATER', style: GoogleFonts.rajdhani(color: AppColors.textMuted, fontWeight: FontWeight.bold)),
+              ),
+              NeonButton(
+                label: 'RESTORE NOW',
+                color: AppColors.warning,
+                height: 36,
+                fontSize: 11,
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldRestore == true) {
+          await _restoreBackup(meta);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   Future<void> _restoreBackup(BackupMetadata backup) async {
     final security = ref.read(securityServiceProvider);
     final confirmed = await security.authenticateAction(
@@ -339,12 +394,36 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen> {
                   letterSpacing: 0.8,
                 ),
               ),
-              NeonButton(
-                label: '+ CREATE SNAPSHOT',
-                color: AppColors.primary,
-                height: 32,
-                fontSize: 11,
-                onPressed: _isProcessing ? null : _createBackup,
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.file_upload_outlined, size: 14, color: AppColors.accent),
+                    label: Text(
+                      'IMPORT',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.accent),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _isProcessing ? null : _importBackupFile,
+                  ),
+                  const SizedBox(width: 8),
+                  NeonButton(
+                    label: '+ CREATE',
+                    color: AppColors.primary,
+                    height: 32,
+                    fontSize: 11,
+                    onPressed: _isProcessing ? null : _createBackup,
+                  ),
+                ],
               ),
             ],
           ),
@@ -364,13 +443,35 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.cardBorder),
               ),
-              child: Text(
-                'No database snapshots created yet. Tap "+ CREATE SNAPSHOT" to generate an offline copy.',
-                style: GoogleFonts.rajdhani(
-                  fontSize: 13,
-                  color: AppColors.textMuted,
-                ),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text(
+                    'No database snapshots found in app storage.\nCreate a new snapshot or import an existing .db file.',
+                    style: GoogleFonts.rajdhani(
+                      fontSize: 13,
+                      color: AppColors.textMuted,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 14),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.file_upload_outlined, size: 16, color: AppColors.accent),
+                    label: Text(
+                      'IMPORT BACKUP FILE (.db)',
+                      style: GoogleFonts.rajdhani(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.accent),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _isProcessing ? null : _importBackupFile,
+                  ),
+                ],
               ),
             )
           else

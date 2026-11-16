@@ -198,7 +198,7 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                     // Session Meta
                     _buildMetaRow('SESSION ID', '#$shortId'),
                     const SizedBox(height: 4),
-                    _buildMetaRow('DATE & TIME', TimeFormatter.formatTime(receiptData.endedAt)),
+                    _buildMetaRow('DATE & TIME', TimeFormatter.formatDateTime(receiptData.endedAt)),
                     const SizedBox(height: 4),
                     _buildMetaRow(
                       'CUSTOMER',

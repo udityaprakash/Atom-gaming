@@ -78,11 +78,24 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Inject Dynamic Version into Application
+        run: |
+          VERSION="${{ steps.versioning.outputs.VERSION }}"
+          BUILD_NUM="${{ steps.versioning.outputs.BUILD_NUMBER }}"
+          
+          # Inject version into AppConstants and pubspec
+          sed -i "s/defaultValue: '.*'/defaultValue: '${VERSION}'/" lib/core/constants/app_constants.dart
+          sed -i "s/^version: .*/version: ${VERSION}+${BUILD_NUM}/" pubspec.yaml
+          
+          echo "Injected version ${VERSION} into AppConstants and pubspec.yaml"
+          grep "appVersion" lib/core/constants/app_constants.dart
+
       - name: Build Fat-Free Split Release APKs
         run: |
           flutter build apk --release --split-per-abi \
             --build-name="${{ steps.versioning.outputs.VERSION }}" \
-            --build-number="${{ steps.versioning.outputs.BUILD_NUMBER }}"
+            --build-number="${{ steps.versioning.outputs.BUILD_NUMBER }}" \
+            --dart-define=APP_VERSION="${{ steps.versioning.outputs.VERSION }}"
 
       - name: Organize & Rename Release Artifacts
         run: |
