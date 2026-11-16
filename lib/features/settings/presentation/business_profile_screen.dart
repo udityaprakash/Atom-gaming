@@ -6,6 +6,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/neon_button.dart';
+import '../providers/business_profile_provider.dart';
 
 class BusinessProfileScreen extends ConsumerStatefulWidget {
   const BusinessProfileScreen({super.key});
@@ -98,6 +99,8 @@ class _BusinessProfileScreenState extends ConsumerState<BusinessProfileScreen> {
             ),
           );
     }
+
+    ref.invalidate(businessProfileStreamProvider);
 
     if (mounted) {
       setState(() => _isSaving = false);

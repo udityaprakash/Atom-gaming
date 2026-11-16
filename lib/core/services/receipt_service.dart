@@ -176,6 +176,7 @@ class ReceiptService {
     required String sessionId,
     required bool isPaid,
     String? customStoreName,
+    String? customStorePhone,
   }) async {
     final tempDir = await getTemporaryDirectory();
     final shortId = sessionId.length > 8
@@ -188,9 +189,13 @@ class ReceiptService {
         ? customStoreName!.trim()
         : storeName;
 
+    final phoneSuffix = (customStorePhone != null && customStorePhone.trim().isNotEmpty)
+        ? "\n📞 Contact: ${customStorePhone.trim()}"
+        : "";
+
     final thankfulMessage = isPaid
-        ? "Thank you for gaming with us at $effectiveStoreName! 🎮✨\nHere is your official session receipt (#$shortId).\nLevel Up & Game On! 🚀"
-        : "Thank you for visiting $effectiveStoreName! 🎮\nHere is your session bill (#$shortId).\nKindly settle the pending cash balance at the front desk.\nLevel Up & Game On! ✨";
+        ? "Thank you for gaming with us at $effectiveStoreName! 🎮✨\nHere is your official session receipt (#$shortId).$phoneSuffix\nLevel Up & Game On! 🚀"
+        : "Thank you for visiting $effectiveStoreName! 🎮\nHere is your session bill (#$shortId).$phoneSuffix\nKindly settle the pending cash balance at the front desk.\nLevel Up & Game On! ✨";
 
     await SharePlus.instance.share(
       ShareParams(

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/receipt_service.dart';
@@ -9,17 +10,18 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
 import '../../../../shared/widgets/neon_button.dart';
+import '../../../settings/providers/business_profile_provider.dart';
 
-class ReceiptDialog extends StatefulWidget {
+class ReceiptDialog extends ConsumerStatefulWidget {
   final SessionReceiptData receiptData;
 
   const ReceiptDialog({super.key, required this.receiptData});
 
   @override
-  State<ReceiptDialog> createState() => _ReceiptDialogState();
+  ConsumerState<ReceiptDialog> createState() => _ReceiptDialogState();
 }
 
-class _ReceiptDialogState extends State<ReceiptDialog> {
+class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
   final GlobalKey _repaintKey = GlobalKey();
   bool _isSharing = false;
 
@@ -42,10 +44,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       final Uint8List pngBytes = byteData.buffer.asUint8List();
 
       final isPaid = widget.receiptData.paymentStatus.toUpperCase() == AppConstants.paymentPaid;
+      final profile = ref.read(businessProfileStreamProvider).value ?? const BusinessProfileData();
       await ReceiptService.shareReceiptAsImage(
         imageBytes: pngBytes,
         sessionId: widget.receiptData.sessionId,
         isPaid: isPaid,
+        customStoreName: profile.storeName,
+        customStorePhone: profile.storePhone,
       );
     } catch (e) {
       debugPrint('Error sharing receipt image: $e');
@@ -66,6 +71,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(businessProfileStreamProvider).value ?? const BusinessProfileData();
     final receiptData = widget.receiptData;
     final isPaid = receiptData.paymentStatus.toUpperCase() == AppConstants.paymentPaid;
     final shortId = receiptData.sessionId.length > 8
@@ -132,7 +138,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           Icon(Icons.sports_esports, color: AppColors.primary, size: 32),
                           const SizedBox(height: 4),
                           Text(
-                            ReceiptService.storeName,
+                            profile.storeName.isNotEmpty ? profile.storeName : ReceiptService.storeName,
                             textAlign: TextAlign.center,
                             style: GoogleFonts.orbitron(
                               fontSize: 14,
@@ -142,23 +148,46 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            ReceiptService.storeTagline,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.rajdhani(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textMuted,
+                          if (profile.storeAddress.isNotEmpty) ...[
+                            Text(
+                              profile.storeAddress,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.rajdhani(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                              ),
                             ),
-                          ),
-                          Text(
-                            ReceiptService.storeContact,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.rajdhani(
-                              fontSize: 10,
-                              color: AppColors.textMuted,
+                          ] else ...[
+                            Text(
+                              ReceiptService.storeTagline,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.rajdhani(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                              ),
                             ),
-                          ),
+                          ],
+                          if (profile.storePhone.isNotEmpty) ...[
+                            Text(
+                              'Ph: ${profile.storePhone}',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.rajdhani(
+                                fontSize: 10,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ] else ...[
+                            Text(
+                              ReceiptService.storeContact,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.rajdhani(
+                                fontSize: 10,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -373,12 +402,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     const SizedBox(height: 12),
                     Center(
                       child: Text(
-                        '🎮 Level Up & Game On! 🚀',
+                        '🎮 ${profile.receiptFooter.isNotEmpty ? profile.receiptFooter : "Level Up & Game On!"} 🚀',
+                        textAlign: TextAlign.center,
                         style: GoogleFonts.orbitron(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
-                          letterSpacing: 1.0,
+                          letterSpacing: 0.8,
                         ),
                       ),
                     ),
