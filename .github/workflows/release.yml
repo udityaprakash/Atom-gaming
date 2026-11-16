@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build-and-release:
     name: Build Fat-Free Release APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Repository
