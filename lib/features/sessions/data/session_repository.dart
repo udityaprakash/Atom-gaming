@@ -232,11 +232,17 @@ class SessionRepository {
       final sid = _uuid.v4();
       final scheduledEnd = now.add(Duration(minutes: durationMinutes));
 
+      final effectiveControllers = (controllerCount != null && controllerCount >= 1 && controllerCount <= 6)
+          ? controllerCount
+          : 1;
+      final effectiveHourlyRate = room.hourlyRate * effectiveControllers;
+
       // 3. Insert Session
       await _db.into(_db.sessions).insert(
             SessionsCompanion(
               id: Value(sid),
               customerId: Value(resolvedCustomerId),
+              controllerCount: Value(effectiveControllers),
               status: const Value(AppConstants.sessionActive),
               startedAt: Value(now),
               scheduledEndAt: Value(scheduledEnd),
@@ -248,15 +254,16 @@ class SessionRepository {
             ),
           );
 
-      // 4. Insert initial SessionSegment with Room's current price snapshot
+      // 4. Insert initial SessionSegment with Room's current price snapshot multiplied by controllers
       final segmentId = _uuid.v4();
       await _db.into(_db.sessionSegments).insert(
             SessionSegmentsCompanion(
               id: Value(segmentId),
               sessionId: Value(sid),
               roomId: Value(roomId),
+              controllerCount: Value(effectiveControllers),
               startedAt: Value(now),
-              hourlyRateSnapshot: Value(room.hourlyRate),
+              hourlyRateSnapshot: Value(effectiveHourlyRate),
               amount: const Value(0.0),
             ),
           );
@@ -276,7 +283,7 @@ class SessionRepository {
               sessionId: Value(sid),
               eventType: const Value('started'),
               eventTimestamp: Value(now),
-              newValue: Value('Duration: $durationMinutes min | Rate: ₹${room.hourlyRate}/hr'),
+              newValue: Value('Duration: $durationMinutes min | Controllers: $effectiveControllers | Rate: ₹$effectiveHourlyRate/hr (₹${room.hourlyRate} × $effectiveControllers)'),
               notes: Value(notes?.trim()),
             ),
           );
@@ -546,15 +553,17 @@ class SessionRepository {
         ),
       );
 
-      // 5. Create new SessionSegment with destination room's rate snapshot
+      // 5. Create new SessionSegment with destination room's rate snapshot multiplied by controllers
+      final effectiveDestRate = destRoom.hourlyRate * session.controllerCount;
       final newSegmentId = _uuid.v4();
       await _db.into(_db.sessionSegments).insert(
             SessionSegmentsCompanion(
               id: Value(newSegmentId),
               sessionId: Value(sessionId),
               roomId: Value(destinationRoomId),
+              controllerCount: Value(session.controllerCount),
               startedAt: Value(now),
-              hourlyRateSnapshot: Value(destRoom.hourlyRate),
+              hourlyRateSnapshot: Value(effectiveDestRate),
               amount: const Value(0.0),
             ),
           );
@@ -676,6 +685,7 @@ class SessionRepository {
           roomId: segment.roomId,
           roomName: room?.roomName ?? 'Gaming Room',
           equipmentType: room?.equipmentType ?? 'Console',
+          controllerCount: segment.controllerCount,
           startedAt: segmentStart,
           endedAt: segmentEnd,
           hourlyRateSnapshot: segment.hourlyRateSnapshot,
@@ -763,6 +773,7 @@ class SessionRepository {
         sessionId: sessionId,
         customerName: customer?.name,
         customerPhone: customer?.phone,
+        controllerCount: session.controllerCount,
         startedAt: session.startedAt,
         endedAt: now,
         totalDuration: Duration(seconds: calculatedTotalDurationSeconds),
@@ -889,6 +900,7 @@ class SessionRepository {
           roomId: segment.roomId,
           roomName: room?.roomName ?? 'Gaming Room',
           equipmentType: room?.equipmentType ?? 'Console',
+          controllerCount: segment.controllerCount,
           startedAt: segment.startedAt,
           endedAt: segEnd,
           hourlyRateSnapshot: segment.hourlyRateSnapshot,
@@ -907,6 +919,7 @@ class SessionRepository {
       sessionId: session.id,
       customerName: customer?.name,
       customerPhone: customer?.phone,
+      controllerCount: session.controllerCount,
       startedAt: session.startedAt,
       endedAt: session.endedAt ?? DateTime.now(),
       totalDuration: Duration(seconds: session.totalDurationSeconds),

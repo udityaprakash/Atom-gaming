@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/database/app_database.dart';
+import '../../../../core/services/receipt_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
@@ -49,7 +50,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
   @override
   void initState() {
     super.initState();
-    _controllerCount = widget.room.controllerCount;
+    _controllerCount = 1; // Default to 1 controller / player
     if (widget.prefillCustomerName != null) {
       _nameController.text = widget.prefillCustomerName!;
     }
@@ -148,7 +149,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
 
   double get _estimatedCharge {
     final hours = _effectiveDurationMinutes / 60.0;
-    return (hours * widget.room.hourlyRate).roundToDouble();
+    return (hours * widget.room.hourlyRate * _controllerCount).roundToDouble();
   }
 
   @override
@@ -223,9 +224,11 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
                   ),
                   child: Text(
-                    '${CurrencyFormatter.format(widget.room.hourlyRate)}/hr',
+                    _controllerCount > 1
+                        ? '${CurrencyFormatter.format(widget.room.hourlyRate * _controllerCount)}/hr (${CurrencyFormatter.format(widget.room.hourlyRate)} × ${_controllerCount}P)'
+                        : '${CurrencyFormatter.format(widget.room.hourlyRate)}/hr',
                     style: GoogleFonts.orbitron(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: AppColors.primary,
                     ),
@@ -234,6 +237,92 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
               ],
             ),
             const SizedBox(height: 20),
+
+            // Controllers / Player Count Selector (1 to 6)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'CONTROLLERS / PLAYERS',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    ReceiptService.formatPlayerCount(_controllerCount).toUpperCase(),
+                    style: GoogleFonts.orbitron(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: List.generate(6, (index) {
+                final count = index + 1;
+                final isSelected = _controllerCount == count;
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: count < 6 ? 6 : 0),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _controllerCount = count;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.accent.withValues(alpha: 0.2)
+                              : AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected ? AppColors.accent : AppColors.cardBorder,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.sports_esports,
+                              size: 16,
+                              color: isSelected ? AppColors.accent : AppColors.textMuted,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${count}P',
+                              style: GoogleFonts.orbitron(
+                                fontSize: 11,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                color: isSelected ? AppColors.accent : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
 
             // Duration Presets
             Text(
@@ -556,6 +645,30 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
+                        'Billing Rate (${ReceiptService.formatPlayerCount(_controllerCount)})',
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _controllerCount > 1
+                            ? '${CurrencyFormatter.format(widget.room.hourlyRate * _controllerCount)}/hr (${CurrencyFormatter.format(widget.room.hourlyRate)} × $_controllerCount)'
+                            : '${CurrencyFormatter.format(widget.room.hourlyRate)}/hr',
+                        style: GoogleFonts.orbitron(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
                         'Estimated Charge',
                         style: GoogleFonts.rajdhani(
                           fontSize: 14,
@@ -613,7 +726,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
         customerId: _selectedCustomerId,
         customerName: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : null,
         customerPhone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
-        playerCount: 1,
+        playerCount: _controllerCount,
         controllerCount: _controllerCount,
         notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
       );

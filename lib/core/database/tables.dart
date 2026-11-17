@@ -33,6 +33,7 @@ class Customers extends Table {
 class Sessions extends Table {
   TextColumn get id => text()();
   TextColumn get customerId => text().nullable().references(Customers, #id)();
+  IntColumn get controllerCount => integer().withDefault(const Constant(1))();
   TextColumn get status => text().withDefault(const Constant('ACTIVE'))();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get scheduledEndAt => dateTime()();
@@ -52,6 +53,7 @@ class SessionSegments extends Table {
   TextColumn get id => text()();
   TextColumn get sessionId => text().references(Sessions, #id)();
   TextColumn get roomId => text().references(Rooms, #id)();
+  IntColumn get controllerCount => integer().withDefault(const Constant(1))();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get endedAt => dateTime().nullable()();
   RealColumn get hourlyRateSnapshot => real()();

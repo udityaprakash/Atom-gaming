@@ -10,6 +10,7 @@ class SessionReceiptData {
   final String sessionId;
   final String? customerName;
   final String? customerPhone;
+  final int controllerCount;
   final DateTime startedAt;
   final DateTime endedAt;
   final Duration totalDuration;
@@ -28,6 +29,7 @@ class SessionReceiptData {
     required this.sessionId,
     this.customerName,
     this.customerPhone,
+    this.controllerCount = 1,
     required this.startedAt,
     required this.endedAt,
     required this.totalDuration,
@@ -51,6 +53,12 @@ class ReceiptService {
   static const String storeTagline = 'Ultimate Console & VR Gaming Experience';
   static const String storeAddress = 'Shop #4, Level 1, Metro City Mall';
   static const String storeContact = '+91 98765 43210';
+
+  /// Formats player count label (e.g. "Single Player", "2 Players", "3 Players")
+  static String formatPlayerCount(int controllers) {
+    if (controllers <= 1) return 'Single Player';
+    return '$controllers Players';
+  }
 
   /// Generates a clean, monospaced plain-text receipt suitable for SMS, WhatsApp, and thermal printing
   static String formatReceiptText(
@@ -84,6 +92,7 @@ class ReceiptService {
     if (data.customerPhone != null && data.customerPhone!.isNotEmpty) {
       buffer.writeln('Phone      : ${data.customerPhone}');
     }
+    buffer.writeln('Players    : ${formatPlayerCount(data.controllerCount)} (${data.controllerCount} Controllers)');
     buffer.writeln('----------------------------------------');
     buffer.writeln('ROOM & SESSION BREAKDOWN:');
 
@@ -92,7 +101,7 @@ class ReceiptService {
       final segTime = '${timeOnlyFormatter.format(seg.startedAt)} - ${timeOnlyFormatter.format(seg.endedAt)}';
       final durationStr = TimeFormatter.formatDurationHuman(seg.duration);
 
-      buffer.writeln('${i + 1}. ${seg.roomName} [${seg.equipmentType}]');
+      buffer.writeln('${i + 1}. ${seg.roomName} [${seg.equipmentType} • ${formatPlayerCount(seg.controllerCount)}]');
       buffer.writeln('   Time   : $segTime ($durationStr)');
       buffer.writeln('   Rate   : ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr');
       buffer.writeln('   Amount : ${CurrencyFormatter.format(seg.amount)}');

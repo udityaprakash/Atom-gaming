@@ -210,6 +210,8 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                       const SizedBox(height: 4),
                       _buildMetaRow('PHONE', receiptData.customerPhone!),
                     ],
+                    const SizedBox(height: 4),
+                    _buildMetaRow('PLAYERS', ReceiptService.formatPlayerCount(receiptData.controllerCount)),
                     const SizedBox(height: 12),
                     const Divider(color: AppColors.cardBorder, height: 1),
                     const SizedBox(height: 12),
@@ -265,7 +267,7 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    '${seg.equipmentType} • ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr',
+                                    '${seg.equipmentType} • ${ReceiptService.formatPlayerCount(seg.controllerCount)} • ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr',
                                     style: GoogleFonts.rajdhani(
                                       fontSize: 11,
                                       color: AppColors.textMuted,

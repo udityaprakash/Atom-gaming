@@ -1011,6 +1011,18 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       'REFERENCES customers (id)',
     ),
   );
+  static const VerificationMeta _controllerCountMeta = const VerificationMeta(
+    'controllerCount',
+  );
+  @override
+  late final GeneratedColumn<int> controllerCount = GeneratedColumn<int>(
+    'controller_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -1117,6 +1129,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   List<GeneratedColumn> get $columns => [
     id,
     customerId,
+    controllerCount,
     status,
     startedAt,
     scheduledEndAt,
@@ -1148,6 +1161,15 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       context.handle(
         _customerIdMeta,
         customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    }
+    if (data.containsKey('controller_count')) {
+      context.handle(
+        _controllerCountMeta,
+        controllerCount.isAcceptableOrUnknown(
+          data['controller_count']!,
+          _controllerCountMeta,
+        ),
       );
     }
     if (data.containsKey('status')) {
@@ -1242,6 +1264,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}customer_id'],
       ),
+      controllerCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}controller_count'],
+      )!,
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -1290,6 +1316,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
 class Session extends DataClass implements Insertable<Session> {
   final String id;
   final String? customerId;
+  final int controllerCount;
   final String status;
   final DateTime startedAt;
   final DateTime scheduledEndAt;
@@ -1302,6 +1329,7 @@ class Session extends DataClass implements Insertable<Session> {
   const Session({
     required this.id,
     this.customerId,
+    this.controllerCount = 1,
     required this.status,
     required this.startedAt,
     required this.scheduledEndAt,
@@ -1319,6 +1347,7 @@ class Session extends DataClass implements Insertable<Session> {
     if (!nullToAbsent || customerId != null) {
       map['customer_id'] = Variable<String>(customerId);
     }
+    map['controller_count'] = Variable<int>(controllerCount);
     map['status'] = Variable<String>(status);
     map['started_at'] = Variable<DateTime>(startedAt);
     map['scheduled_end_at'] = Variable<DateTime>(scheduledEndAt);
@@ -1339,6 +1368,7 @@ class Session extends DataClass implements Insertable<Session> {
       customerId: customerId == null && nullToAbsent
           ? const Value.absent()
           : Value(customerId),
+      controllerCount: Value(controllerCount),
       status: Value(status),
       startedAt: Value(startedAt),
       scheduledEndAt: Value(scheduledEndAt),
@@ -1361,6 +1391,7 @@ class Session extends DataClass implements Insertable<Session> {
     return Session(
       id: serializer.fromJson<String>(json['id']),
       customerId: serializer.fromJson<String?>(json['customerId']),
+      controllerCount: serializer.fromJson<int>(json['controllerCount']),
       status: serializer.fromJson<String>(json['status']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       scheduledEndAt: serializer.fromJson<DateTime>(json['scheduledEndAt']),
@@ -1380,6 +1411,7 @@ class Session extends DataClass implements Insertable<Session> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'customerId': serializer.toJson<String?>(customerId),
+      'controllerCount': serializer.toJson<int>(controllerCount),
       'status': serializer.toJson<String>(status),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'scheduledEndAt': serializer.toJson<DateTime>(scheduledEndAt),
@@ -1395,6 +1427,7 @@ class Session extends DataClass implements Insertable<Session> {
   Session copyWith({
     String? id,
     Value<String?> customerId = const Value.absent(),
+    int? controllerCount,
     String? status,
     DateTime? startedAt,
     DateTime? scheduledEndAt,
@@ -1407,6 +1440,7 @@ class Session extends DataClass implements Insertable<Session> {
   }) => Session(
     id: id ?? this.id,
     customerId: customerId.present ? customerId.value : this.customerId,
+    controllerCount: controllerCount ?? this.controllerCount,
     status: status ?? this.status,
     startedAt: startedAt ?? this.startedAt,
     scheduledEndAt: scheduledEndAt ?? this.scheduledEndAt,
@@ -1423,6 +1457,9 @@ class Session extends DataClass implements Insertable<Session> {
       customerId: data.customerId.present
           ? data.customerId.value
           : this.customerId,
+      controllerCount: data.controllerCount.present
+          ? data.controllerCount.value
+          : this.controllerCount,
       status: data.status.present ? data.status.value : this.status,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
       scheduledEndAt: data.scheduledEndAt.present
@@ -1450,6 +1487,7 @@ class Session extends DataClass implements Insertable<Session> {
     return (StringBuffer('Session(')
           ..write('id: $id, ')
           ..write('customerId: $customerId, ')
+          ..write('controllerCount: $controllerCount, ')
           ..write('status: $status, ')
           ..write('startedAt: $startedAt, ')
           ..write('scheduledEndAt: $scheduledEndAt, ')
@@ -1467,6 +1505,7 @@ class Session extends DataClass implements Insertable<Session> {
   int get hashCode => Object.hash(
     id,
     customerId,
+    controllerCount,
     status,
     startedAt,
     scheduledEndAt,
@@ -1483,6 +1522,7 @@ class Session extends DataClass implements Insertable<Session> {
       (other is Session &&
           other.id == this.id &&
           other.customerId == this.customerId &&
+          other.controllerCount == this.controllerCount &&
           other.status == this.status &&
           other.startedAt == this.startedAt &&
           other.scheduledEndAt == this.scheduledEndAt &&
@@ -1497,6 +1537,7 @@ class Session extends DataClass implements Insertable<Session> {
 class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<String> id;
   final Value<String?> customerId;
+  final Value<int> controllerCount;
   final Value<String> status;
   final Value<DateTime> startedAt;
   final Value<DateTime> scheduledEndAt;
@@ -1510,6 +1551,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.customerId = const Value.absent(),
+    this.controllerCount = const Value.absent(),
     this.status = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.scheduledEndAt = const Value.absent(),
@@ -1524,6 +1566,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   SessionsCompanion.insert({
     required String id,
     this.customerId = const Value.absent(),
+    this.controllerCount = const Value.absent(),
     this.status = const Value.absent(),
     required DateTime startedAt,
     required DateTime scheduledEndAt,
@@ -1541,6 +1584,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   static Insertable<Session> custom({
     Expression<String>? id,
     Expression<String>? customerId,
+    Expression<int>? controllerCount,
     Expression<String>? status,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? scheduledEndAt,
@@ -1555,6 +1599,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (customerId != null) 'customer_id': customerId,
+      if (controllerCount != null) 'controller_count': controllerCount,
       if (status != null) 'status': status,
       if (startedAt != null) 'started_at': startedAt,
       if (scheduledEndAt != null) 'scheduled_end_at': scheduledEndAt,
@@ -1572,6 +1617,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   SessionsCompanion copyWith({
     Value<String>? id,
     Value<String?>? customerId,
+    Value<int>? controllerCount,
     Value<String>? status,
     Value<DateTime>? startedAt,
     Value<DateTime>? scheduledEndAt,
@@ -1586,6 +1632,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return SessionsCompanion(
       id: id ?? this.id,
       customerId: customerId ?? this.customerId,
+      controllerCount: controllerCount ?? this.controllerCount,
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       scheduledEndAt: scheduledEndAt ?? this.scheduledEndAt,
@@ -1607,6 +1654,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     }
     if (customerId.present) {
       map['customer_id'] = Variable<String>(customerId.value);
+    }
+    if (controllerCount.present) {
+      map['controller_count'] = Variable<int>(controllerCount.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
@@ -1702,6 +1752,18 @@ class $SessionSegmentsTable extends SessionSegments
       'REFERENCES rooms (id)',
     ),
   );
+  static const VerificationMeta _controllerCountMeta = const VerificationMeta(
+    'controllerCount',
+  );
+  @override
+  late final GeneratedColumn<int> controllerCount = GeneratedColumn<int>(
+    'controller_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _startedAtMeta = const VerificationMeta(
     'startedAt',
   );
@@ -1750,6 +1812,7 @@ class $SessionSegmentsTable extends SessionSegments
     id,
     sessionId,
     roomId,
+    controllerCount,
     startedAt,
     endedAt,
     hourlyRateSnapshot,
@@ -1787,6 +1850,15 @@ class $SessionSegmentsTable extends SessionSegments
       );
     } else if (isInserting) {
       context.missing(_roomIdMeta);
+    }
+    if (data.containsKey('controller_count')) {
+      context.handle(
+        _controllerCountMeta,
+        controllerCount.isAcceptableOrUnknown(
+          data['controller_count']!,
+          _controllerCountMeta,
+        ),
+      );
     }
     if (data.containsKey('started_at')) {
       context.handle(
@@ -1840,6 +1912,10 @@ class $SessionSegmentsTable extends SessionSegments
         DriftSqlType.string,
         data['${effectivePrefix}room_id'],
       )!,
+      controllerCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}controller_count'],
+      )!,
       startedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}started_at'],
@@ -1869,6 +1945,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
   final String id;
   final String sessionId;
   final String roomId;
+  final int controllerCount;
   final DateTime startedAt;
   final DateTime? endedAt;
   final double hourlyRateSnapshot;
@@ -1877,6 +1954,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     required this.id,
     required this.sessionId,
     required this.roomId,
+    this.controllerCount = 1,
     required this.startedAt,
     this.endedAt,
     required this.hourlyRateSnapshot,
@@ -1888,6 +1966,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     map['id'] = Variable<String>(id);
     map['session_id'] = Variable<String>(sessionId);
     map['room_id'] = Variable<String>(roomId);
+    map['controller_count'] = Variable<int>(controllerCount);
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || endedAt != null) {
       map['ended_at'] = Variable<DateTime>(endedAt);
@@ -1902,6 +1981,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: Value(id),
       sessionId: Value(sessionId),
       roomId: Value(roomId),
+      controllerCount: Value(controllerCount),
       startedAt: Value(startedAt),
       endedAt: endedAt == null && nullToAbsent
           ? const Value.absent()
@@ -1920,6 +2000,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: serializer.fromJson<String>(json['id']),
       sessionId: serializer.fromJson<String>(json['sessionId']),
       roomId: serializer.fromJson<String>(json['roomId']),
+      controllerCount: serializer.fromJson<int>(json['controllerCount']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
       hourlyRateSnapshot: serializer.fromJson<double>(
@@ -1935,6 +2016,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       'id': serializer.toJson<String>(id),
       'sessionId': serializer.toJson<String>(sessionId),
       'roomId': serializer.toJson<String>(roomId),
+      'controllerCount': serializer.toJson<int>(controllerCount),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'endedAt': serializer.toJson<DateTime?>(endedAt),
       'hourlyRateSnapshot': serializer.toJson<double>(hourlyRateSnapshot),
@@ -1946,6 +2028,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     String? id,
     String? sessionId,
     String? roomId,
+    int? controllerCount,
     DateTime? startedAt,
     Value<DateTime?> endedAt = const Value.absent(),
     double? hourlyRateSnapshot,
@@ -1954,6 +2037,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
     roomId: roomId ?? this.roomId,
+    controllerCount: controllerCount ?? this.controllerCount,
     startedAt: startedAt ?? this.startedAt,
     endedAt: endedAt.present ? endedAt.value : this.endedAt,
     hourlyRateSnapshot: hourlyRateSnapshot ?? this.hourlyRateSnapshot,
@@ -1964,6 +2048,9 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: data.id.present ? data.id.value : this.id,
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       roomId: data.roomId.present ? data.roomId.value : this.roomId,
+      controllerCount: data.controllerCount.present
+          ? data.controllerCount.value
+          : this.controllerCount,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
       endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
       hourlyRateSnapshot: data.hourlyRateSnapshot.present
@@ -1979,6 +2066,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('roomId: $roomId, ')
+          ..write('controllerCount: $controllerCount, ')
           ..write('startedAt: $startedAt, ')
           ..write('endedAt: $endedAt, ')
           ..write('hourlyRateSnapshot: $hourlyRateSnapshot, ')
@@ -1992,6 +2080,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     id,
     sessionId,
     roomId,
+    controllerCount,
     startedAt,
     endedAt,
     hourlyRateSnapshot,
@@ -2004,6 +2093,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
           other.id == this.id &&
           other.sessionId == this.sessionId &&
           other.roomId == this.roomId &&
+          other.controllerCount == this.controllerCount &&
           other.startedAt == this.startedAt &&
           other.endedAt == this.endedAt &&
           other.hourlyRateSnapshot == this.hourlyRateSnapshot &&
@@ -2014,6 +2104,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
   final Value<String> id;
   final Value<String> sessionId;
   final Value<String> roomId;
+  final Value<int> controllerCount;
   final Value<DateTime> startedAt;
   final Value<DateTime?> endedAt;
   final Value<double> hourlyRateSnapshot;
@@ -2023,6 +2114,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.roomId = const Value.absent(),
+    this.controllerCount = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.endedAt = const Value.absent(),
     this.hourlyRateSnapshot = const Value.absent(),
@@ -2033,6 +2125,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     required String id,
     required String sessionId,
     required String roomId,
+    this.controllerCount = const Value.absent(),
     required DateTime startedAt,
     this.endedAt = const Value.absent(),
     required double hourlyRateSnapshot,
@@ -2047,6 +2140,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     Expression<String>? id,
     Expression<String>? sessionId,
     Expression<String>? roomId,
+    Expression<int>? controllerCount,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? endedAt,
     Expression<double>? hourlyRateSnapshot,
@@ -2057,6 +2151,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
       if (id != null) 'id': id,
       if (sessionId != null) 'session_id': sessionId,
       if (roomId != null) 'room_id': roomId,
+      if (controllerCount != null) 'controller_count': controllerCount,
       if (startedAt != null) 'started_at': startedAt,
       if (endedAt != null) 'ended_at': endedAt,
       if (hourlyRateSnapshot != null)
@@ -2070,6 +2165,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     Value<String>? id,
     Value<String>? sessionId,
     Value<String>? roomId,
+    Value<int>? controllerCount,
     Value<DateTime>? startedAt,
     Value<DateTime?>? endedAt,
     Value<double>? hourlyRateSnapshot,
@@ -2080,6 +2176,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       roomId: roomId ?? this.roomId,
+      controllerCount: controllerCount ?? this.controllerCount,
       startedAt: startedAt ?? this.startedAt,
       endedAt: endedAt ?? this.endedAt,
       hourlyRateSnapshot: hourlyRateSnapshot ?? this.hourlyRateSnapshot,
@@ -2099,6 +2196,9 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     }
     if (roomId.present) {
       map['room_id'] = Variable<String>(roomId.value);
+    }
+    if (controllerCount.present) {
+      map['controller_count'] = Variable<int>(controllerCount.value);
     }
     if (startedAt.present) {
       map['started_at'] = Variable<DateTime>(startedAt.value);
