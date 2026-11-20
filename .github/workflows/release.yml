@@ -96,6 +96,7 @@ jobs:
       - name: Build Fat-Free Split Release APKs
         run: |
           flutter build apk --release --split-per-abi \
+            --android-skip-build-dependency-validation \
             --build-name="${{ steps.versioning.outputs.VERSION }}" \
             --build-number="${{ steps.versioning.outputs.BUILD_NUMBER }}" \
             --dart-define=APP_VERSION="${{ steps.versioning.outputs.VERSION }}"
