@@ -83,11 +83,14 @@ jobs:
           VERSION="${{ steps.versioning.outputs.VERSION }}"
           BUILD_NUM="${{ steps.versioning.outputs.BUILD_NUMBER }}"
           
-          # Inject version into AppConstants and pubspec
-          sed -i "s/defaultValue: '.*'/defaultValue: '${VERSION}'/" lib/core/constants/app_constants.dart
-          sed -i "s/^version: .*/version: ${VERSION}+${BUILD_NUM}/" pubspec.yaml
+          # Extract 3-part SemVer (0.day.month+build) for pubspec.yaml compliance (SemVer requires X.Y.Z)
+          PUBSPEC_SEMVER="0.$(echo ${VERSION} | cut -d'.' -f2).$(echo ${VERSION} | cut -d'.' -f3)"
           
-          echo "Injected version ${VERSION} into AppConstants and pubspec.yaml"
+          # Inject full version into AppConstants and valid SemVer into pubspec
+          sed -i "s/defaultValue: '.*'/defaultValue: '${VERSION}'/" lib/core/constants/app_constants.dart
+          sed -i "s/^version: .*/version: ${PUBSPEC_SEMVER}+${BUILD_NUM}/" pubspec.yaml
+          
+          echo "Injected version ${VERSION} into AppConstants and ${PUBSPEC_SEMVER}+${BUILD_NUM} into pubspec.yaml"
           grep "appVersion" lib/core/constants/app_constants.dart
 
       - name: Build Fat-Free Split Release APKs
