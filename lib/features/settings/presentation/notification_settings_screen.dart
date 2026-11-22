@@ -22,6 +22,7 @@ class _NotificationSettingsScreenState
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
   bool _autoOvertimeEnabled = false;
+  bool _billOnPauseEnabled = false;
   bool _isLoading = true;
 
   @override
@@ -35,12 +36,14 @@ class _NotificationSettingsScreenState
     final sound = await alarmService.isSoundEnabled();
     final vibration = await alarmService.isVibrationEnabled();
     final autoOvertime = await alarmService.isAutoOvertimeEnabled();
+    final billOnPause = await alarmService.isBillOnPauseEnabled();
 
     if (mounted) {
       setState(() {
         _soundEnabled = sound;
         _vibrationEnabled = vibration;
         _autoOvertimeEnabled = autoOvertime;
+        _billOnPauseEnabled = billOnPause;
         _isLoading = false;
       });
     }
@@ -147,12 +150,25 @@ class _NotificationSettingsScreenState
           ),
           const SizedBox(height: 20),
 
-          _buildSectionHeader('TIMER EXPIRY BEHAVIOR'),
+          _buildSectionHeader('TIMER EXPIRY & PAUSE BILLING RULES'),
+          _buildSwitchTile(
+            title: 'Bill During Mid-Session Pause',
+            subtitle: _billOnPauseEnabled
+                ? 'ENABLED: Room hourly rate continues accruing even while session is paused.'
+                : 'PAUSE IS FREE: Session billing freezes while paused. Paused time is not charged.',
+            value: _billOnPauseEnabled,
+            onChanged: (val) async {
+              setState(() => _billOnPauseEnabled = val);
+              await alarmService.setBillOnPauseEnabled(val);
+            },
+            icon: Icons.pause_circle_outline,
+          ),
+          const SizedBox(height: 12),
           _buildSwitchTile(
             title: 'Auto-Overtime on Expiry',
             subtitle: _autoOvertimeEnabled
-                ? 'ENABLED: Overtime timer starts ticking automatically when time is reached.'
-                : 'PAUSE WHEN FINISHED: Session automatically pauses when time is reached. Overtime will not start unless Free Style is tapped.',
+                ? 'ENABLED: Overtime timer starts ticking and billing automatically when time is reached.'
+                : 'PAUSE WHEN FINISHED: Session stops billing at scheduled end time. Extra time is only billed if Free Style or Extend is chosen.',
             value: _autoOvertimeEnabled,
             onChanged: (val) async {
               setState(() => _autoOvertimeEnabled = val);

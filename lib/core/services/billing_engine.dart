@@ -2,6 +2,8 @@ class SegmentBillingDetails {
   final String roomId;
   final String roomName;
   final String equipmentType;
+  final String? gameTitle;
+  final String? gameId;
   final int controllerCount;
   final DateTime startedAt;
   final DateTime endedAt;
@@ -13,6 +15,8 @@ class SegmentBillingDetails {
     required this.roomId,
     required this.roomName,
     required this.equipmentType,
+    this.gameTitle,
+    this.gameId,
     this.controllerCount = 1,
     required this.startedAt,
     required this.endedAt,
@@ -113,6 +117,8 @@ class BillingEngine {
     required String roomId,
     required String roomName,
     required String equipmentType,
+    String? gameTitle,
+    String? gameId,
     int controllerCount = 1,
     required DateTime startedAt,
     required DateTime endedAt,
@@ -133,6 +139,8 @@ class BillingEngine {
       roomId: roomId,
       roomName: roomName,
       equipmentType: equipmentType,
+      gameTitle: gameTitle,
+      gameId: gameId,
       controllerCount: controllerCount,
       startedAt: startedAt,
       endedAt: endedAt,

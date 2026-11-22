@@ -10,6 +10,7 @@ class SessionReceiptData {
   final String sessionId;
   final String? customerName;
   final String? customerPhone;
+  final String? gameTitle;
   final int controllerCount;
   final DateTime startedAt;
   final DateTime endedAt;
@@ -29,6 +30,7 @@ class SessionReceiptData {
     required this.sessionId,
     this.customerName,
     this.customerPhone,
+    this.gameTitle,
     this.controllerCount = 1,
     required this.startedAt,
     required this.endedAt,
@@ -93,6 +95,9 @@ class ReceiptService {
       buffer.writeln('Phone      : ${data.customerPhone}');
     }
     buffer.writeln('Players    : ${formatPlayerCount(data.controllerCount)} (${data.controllerCount} Controllers)');
+    if (data.gameTitle != null && data.gameTitle!.isNotEmpty) {
+      buffer.writeln('Game       : ${data.gameTitle}');
+    }
     buffer.writeln('----------------------------------------');
     buffer.writeln('ROOM & SESSION BREAKDOWN:');
 
@@ -100,8 +105,9 @@ class ReceiptService {
       final seg = data.segments[i];
       final segTime = '${timeOnlyFormatter.format(seg.startedAt)} - ${timeOnlyFormatter.format(seg.endedAt)}';
       final durationStr = TimeFormatter.formatDurationHuman(seg.duration);
+      final gameLabel = seg.gameTitle != null && seg.gameTitle!.isNotEmpty ? ' • 🎮 ${seg.gameTitle}' : '';
 
-      buffer.writeln('${i + 1}. ${seg.roomName} [${seg.equipmentType} • ${formatPlayerCount(seg.controllerCount)}]');
+      buffer.writeln('${i + 1}. ${seg.roomName} [${seg.equipmentType} • ${formatPlayerCount(seg.controllerCount)}$gameLabel]');
       buffer.writeln('   Time   : $segTime ($durationStr)');
       buffer.writeln('   Rate   : ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr');
       buffer.writeln('   Amount : ${CurrencyFormatter.format(seg.amount)}');

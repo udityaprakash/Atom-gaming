@@ -29,10 +29,26 @@ class Customers extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('Game')
+class Games extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text().withLength(min: 1, max: 100)();
+  TextColumn get platform => text().nullable()(); // PS5, Xbox, PC, VR, Nintendo, All
+  TextColumn get genre => text().nullable()();    // Sports, Action, Racing, etc.
+  RealColumn get hourlyRate => real()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('Session')
 class Sessions extends Table {
   TextColumn get id => text()();
   TextColumn get customerId => text().nullable().references(Customers, #id)();
+  TextColumn get gameId => text().nullable().references(Games, #id)();
   IntColumn get controllerCount => integer().withDefault(const Constant(1))();
   TextColumn get status => text().withDefault(const Constant('ACTIVE'))();
   DateTimeColumn get startedAt => dateTime()();
@@ -53,6 +69,7 @@ class SessionSegments extends Table {
   TextColumn get id => text()();
   TextColumn get sessionId => text().references(Sessions, #id)();
   TextColumn get roomId => text().references(Rooms, #id)();
+  TextColumn get gameId => text().nullable().references(Games, #id)();
   IntColumn get controllerCount => integer().withDefault(const Constant(1))();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get endedAt => dateTime().nullable()();

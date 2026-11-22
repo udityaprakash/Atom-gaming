@@ -983,6 +983,502 @@ class CustomersCompanion extends UpdateCompanion<Customer> {
   }
 }
 
+class $GamesTable extends Games with TableInfo<$GamesTable, Game> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $GamesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _platformMeta =
+      const VerificationMeta('platform');
+  @override
+  late final GeneratedColumn<String> platform = GeneratedColumn<String>(
+    'platform',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _genreMeta = const VerificationMeta('genre');
+  @override
+  late final GeneratedColumn<String> genre = GeneratedColumn<String>(
+    'genre',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hourlyRateMeta =
+      const VerificationMeta('hourlyRate');
+  @override
+  late final GeneratedColumn<double> hourlyRate = GeneratedColumn<double>(
+    'hourly_rate',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isActiveMeta =
+      const VerificationMeta('isActive');
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+    'is_active',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_active" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    platform,
+    genre,
+    hourlyRate,
+    isActive,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'games';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Game> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('platform')) {
+      context.handle(
+        _platformMeta,
+        platform.isAcceptableOrUnknown(data['platform']!, _platformMeta),
+      );
+    }
+    if (data.containsKey('genre')) {
+      context.handle(
+        _genreMeta,
+        genre.isAcceptableOrUnknown(data['genre']!, _genreMeta),
+      );
+    }
+    if (data.containsKey('hourly_rate')) {
+      context.handle(
+        _hourlyRateMeta,
+        hourlyRate.isAcceptableOrUnknown(data['hourly_rate']!, _hourlyRateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hourlyRateMeta);
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(
+        _isActiveMeta,
+        isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Game map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Game(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      platform: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}platform'],
+      ),
+      genre: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}genre'],
+      ),
+      hourlyRate: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}hourly_rate'],
+      )!,
+      isActive: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_active'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $GamesTable createAlias(String alias) {
+    return $GamesTable(attachedDatabase, alias);
+  }
+}
+
+class Game extends DataClass implements Insertable<Game> {
+  final String id;
+  final String title;
+  final String? platform;
+  final String? genre;
+  final double hourlyRate;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Game({
+    required this.id,
+    required this.title,
+    this.platform,
+    this.genre,
+    required this.hourlyRate,
+    required this.isActive,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || platform != null) {
+      map['platform'] = Variable<String>(platform);
+    }
+    if (!nullToAbsent || genre != null) {
+      map['genre'] = Variable<String>(genre);
+    }
+    map['hourly_rate'] = Variable<double>(hourlyRate);
+    map['is_active'] = Variable<bool>(isActive);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  GamesCompanion toCompanion(bool nullToAbsent) {
+    return GamesCompanion(
+      id: Value(id),
+      title: Value(title),
+      platform:
+          platform == null && nullToAbsent
+              ? const Value.absent()
+              : Value(platform),
+      genre:
+          genre == null && nullToAbsent ? const Value.absent() : Value(genre),
+      hourlyRate: Value(hourlyRate),
+      isActive: Value(isActive),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Game.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Game(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      platform: serializer.fromJson<String?>(json['platform']),
+      genre: serializer.fromJson<String?>(json['genre']),
+      hourlyRate: serializer.fromJson<double>(json['hourlyRate']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'platform': serializer.toJson<String?>(platform),
+      'genre': serializer.toJson<String?>(genre),
+      'hourlyRate': serializer.toJson<double>(hourlyRate),
+      'isActive': serializer.toJson<bool>(isActive),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Game copyWith({
+    String? id,
+    String? title,
+    Value<String?> platform = const Value.absent(),
+    Value<String?> genre = const Value.absent(),
+    double? hourlyRate,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => Game(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    platform: platform.present ? platform.value : this.platform,
+    genre: genre.present ? genre.value : this.genre,
+    hourlyRate: hourlyRate ?? this.hourlyRate,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  @override
+  String toString() {
+    return (StringBuffer('Game(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('platform: $platform, ')
+          ..write('genre: $genre, ')
+          ..write('hourlyRate: $hourlyRate, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    platform,
+    genre,
+    hourlyRate,
+    isActive,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Game &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.platform == this.platform &&
+          other.genre == this.genre &&
+          other.hourlyRate == this.hourlyRate &&
+          other.isActive == this.isActive &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class GamesCompanion extends UpdateCompanion<Game> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<String?> platform;
+  final Value<String?> genre;
+  final Value<double> hourlyRate;
+  final Value<bool> isActive;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const GamesCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.platform = const Value.absent(),
+    this.genre = const Value.absent(),
+    this.hourlyRate = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  GamesCompanion.insert({
+    required String id,
+    required String title,
+    this.platform = const Value.absent(),
+    this.genre = const Value.absent(),
+    required double hourlyRate,
+    this.isActive = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title),
+       hourlyRate = Value(hourlyRate),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Game> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<String>? platform,
+    Expression<String>? genre,
+    Expression<double>? hourlyRate,
+    Expression<bool>? isActive,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (platform != null) 'platform': platform,
+      if (genre != null) 'genre': genre,
+      if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (isActive != null) 'is_active': isActive,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  GamesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<String?>? platform,
+    Value<String?>? genre,
+    Value<double>? hourlyRate,
+    Value<bool>? isActive,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return GamesCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      platform: platform ?? this.platform,
+      genre: genre ?? this.genre,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (platform.present) {
+      map['platform'] = Variable<String>(platform.value);
+    }
+    if (genre.present) {
+      map['genre'] = Variable<String>(genre.value);
+    }
+    if (hourlyRate.present) {
+      map['hourly_rate'] = Variable<double>(hourlyRate.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('GamesCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('platform: $platform, ')
+          ..write('genre: $genre, ')
+          ..write('hourlyRate: $hourlyRate, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -1009,6 +1505,18 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES customers (id)',
+    ),
+  );
+  static const VerificationMeta _gameIdMeta = const VerificationMeta('gameId');
+  @override
+  late final GeneratedColumn<String> gameId = GeneratedColumn<String>(
+    'game_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES games (id)',
     ),
   );
   static const VerificationMeta _controllerCountMeta = const VerificationMeta(
@@ -1129,6 +1637,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   List<GeneratedColumn> get $columns => [
     id,
     customerId,
+    gameId,
     controllerCount,
     status,
     startedAt,
@@ -1161,6 +1670,12 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       context.handle(
         _customerIdMeta,
         customerId.isAcceptableOrUnknown(data['customer_id']!, _customerIdMeta),
+      );
+    }
+    if (data.containsKey('game_id')) {
+      context.handle(
+        _gameIdMeta,
+        gameId.isAcceptableOrUnknown(data['game_id']!, _gameIdMeta),
       );
     }
     if (data.containsKey('controller_count')) {
@@ -1264,6 +1779,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.string,
         data['${effectivePrefix}customer_id'],
       ),
+      gameId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}game_id'],
+      ),
       controllerCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}controller_count'],
@@ -1316,6 +1835,7 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
 class Session extends DataClass implements Insertable<Session> {
   final String id;
   final String? customerId;
+  final String? gameId;
   final int controllerCount;
   final String status;
   final DateTime startedAt;
@@ -1329,6 +1849,7 @@ class Session extends DataClass implements Insertable<Session> {
   const Session({
     required this.id,
     this.customerId,
+    this.gameId,
     this.controllerCount = 1,
     required this.status,
     required this.startedAt,
@@ -1346,6 +1867,9 @@ class Session extends DataClass implements Insertable<Session> {
     map['id'] = Variable<String>(id);
     if (!nullToAbsent || customerId != null) {
       map['customer_id'] = Variable<String>(customerId);
+    }
+    if (!nullToAbsent || gameId != null) {
+      map['game_id'] = Variable<String>(gameId);
     }
     map['controller_count'] = Variable<int>(controllerCount);
     map['status'] = Variable<String>(status);
@@ -1368,6 +1892,9 @@ class Session extends DataClass implements Insertable<Session> {
       customerId: customerId == null && nullToAbsent
           ? const Value.absent()
           : Value(customerId),
+      gameId: gameId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gameId),
       controllerCount: Value(controllerCount),
       status: Value(status),
       startedAt: Value(startedAt),
@@ -1391,6 +1918,7 @@ class Session extends DataClass implements Insertable<Session> {
     return Session(
       id: serializer.fromJson<String>(json['id']),
       customerId: serializer.fromJson<String?>(json['customerId']),
+      gameId: serializer.fromJson<String?>(json['gameId']),
       controllerCount: serializer.fromJson<int>(json['controllerCount']),
       status: serializer.fromJson<String>(json['status']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
@@ -1411,6 +1939,7 @@ class Session extends DataClass implements Insertable<Session> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'customerId': serializer.toJson<String?>(customerId),
+      'gameId': serializer.toJson<String?>(gameId),
       'controllerCount': serializer.toJson<int>(controllerCount),
       'status': serializer.toJson<String>(status),
       'startedAt': serializer.toJson<DateTime>(startedAt),
@@ -1427,6 +1956,7 @@ class Session extends DataClass implements Insertable<Session> {
   Session copyWith({
     String? id,
     Value<String?> customerId = const Value.absent(),
+    Value<String?> gameId = const Value.absent(),
     int? controllerCount,
     String? status,
     DateTime? startedAt,
@@ -1440,6 +1970,7 @@ class Session extends DataClass implements Insertable<Session> {
   }) => Session(
     id: id ?? this.id,
     customerId: customerId.present ? customerId.value : this.customerId,
+    gameId: gameId.present ? gameId.value : this.gameId,
     controllerCount: controllerCount ?? this.controllerCount,
     status: status ?? this.status,
     startedAt: startedAt ?? this.startedAt,
@@ -1457,6 +1988,7 @@ class Session extends DataClass implements Insertable<Session> {
       customerId: data.customerId.present
           ? data.customerId.value
           : this.customerId,
+      gameId: data.gameId.present ? data.gameId.value : this.gameId,
       controllerCount: data.controllerCount.present
           ? data.controllerCount.value
           : this.controllerCount,
@@ -1487,6 +2019,7 @@ class Session extends DataClass implements Insertable<Session> {
     return (StringBuffer('Session(')
           ..write('id: $id, ')
           ..write('customerId: $customerId, ')
+          ..write('gameId: $gameId, ')
           ..write('controllerCount: $controllerCount, ')
           ..write('status: $status, ')
           ..write('startedAt: $startedAt, ')
@@ -1505,6 +2038,7 @@ class Session extends DataClass implements Insertable<Session> {
   int get hashCode => Object.hash(
     id,
     customerId,
+    gameId,
     controllerCount,
     status,
     startedAt,
@@ -1522,6 +2056,7 @@ class Session extends DataClass implements Insertable<Session> {
       (other is Session &&
           other.id == this.id &&
           other.customerId == this.customerId &&
+          other.gameId == this.gameId &&
           other.controllerCount == this.controllerCount &&
           other.status == this.status &&
           other.startedAt == this.startedAt &&
@@ -1537,6 +2072,7 @@ class Session extends DataClass implements Insertable<Session> {
 class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<String> id;
   final Value<String?> customerId;
+  final Value<String?> gameId;
   final Value<int> controllerCount;
   final Value<String> status;
   final Value<DateTime> startedAt;
@@ -1551,6 +2087,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.customerId = const Value.absent(),
+    this.gameId = const Value.absent(),
     this.controllerCount = const Value.absent(),
     this.status = const Value.absent(),
     this.startedAt = const Value.absent(),
@@ -1566,6 +2103,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   SessionsCompanion.insert({
     required String id,
     this.customerId = const Value.absent(),
+    this.gameId = const Value.absent(),
     this.controllerCount = const Value.absent(),
     this.status = const Value.absent(),
     required DateTime startedAt,
@@ -1584,6 +2122,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   static Insertable<Session> custom({
     Expression<String>? id,
     Expression<String>? customerId,
+    Expression<String>? gameId,
     Expression<int>? controllerCount,
     Expression<String>? status,
     Expression<DateTime>? startedAt,
@@ -1599,6 +2138,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (customerId != null) 'customer_id': customerId,
+      if (gameId != null) 'game_id': gameId,
       if (controllerCount != null) 'controller_count': controllerCount,
       if (status != null) 'status': status,
       if (startedAt != null) 'started_at': startedAt,
@@ -1617,6 +2157,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   SessionsCompanion copyWith({
     Value<String>? id,
     Value<String?>? customerId,
+    Value<String?>? gameId,
     Value<int>? controllerCount,
     Value<String>? status,
     Value<DateTime>? startedAt,
@@ -1632,6 +2173,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return SessionsCompanion(
       id: id ?? this.id,
       customerId: customerId ?? this.customerId,
+      gameId: gameId ?? this.gameId,
       controllerCount: controllerCount ?? this.controllerCount,
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
@@ -1654,6 +2196,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     }
     if (customerId.present) {
       map['customer_id'] = Variable<String>(customerId.value);
+    }
+    if (gameId.present) {
+      map['game_id'] = Variable<String>(gameId.value);
     }
     if (controllerCount.present) {
       map['controller_count'] = Variable<int>(controllerCount.value);
@@ -1696,6 +2241,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return (StringBuffer('SessionsCompanion(')
           ..write('id: $id, ')
           ..write('customerId: $customerId, ')
+          ..write('gameId: $gameId, ')
+          ..write('controllerCount: $controllerCount, ')
           ..write('status: $status, ')
           ..write('startedAt: $startedAt, ')
           ..write('scheduledEndAt: $scheduledEndAt, ')
@@ -1750,6 +2297,18 @@ class $SessionSegmentsTable extends SessionSegments
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES rooms (id)',
+    ),
+  );
+  static const VerificationMeta _gameIdMeta = const VerificationMeta('gameId');
+  @override
+  late final GeneratedColumn<String> gameId = GeneratedColumn<String>(
+    'game_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES games (id)',
     ),
   );
   static const VerificationMeta _controllerCountMeta = const VerificationMeta(
@@ -1812,6 +2371,7 @@ class $SessionSegmentsTable extends SessionSegments
     id,
     sessionId,
     roomId,
+    gameId,
     controllerCount,
     startedAt,
     endedAt,
@@ -1850,6 +2410,12 @@ class $SessionSegmentsTable extends SessionSegments
       );
     } else if (isInserting) {
       context.missing(_roomIdMeta);
+    }
+    if (data.containsKey('game_id')) {
+      context.handle(
+        _gameIdMeta,
+        gameId.isAcceptableOrUnknown(data['game_id']!, _gameIdMeta),
+      );
     }
     if (data.containsKey('controller_count')) {
       context.handle(
@@ -1912,6 +2478,10 @@ class $SessionSegmentsTable extends SessionSegments
         DriftSqlType.string,
         data['${effectivePrefix}room_id'],
       )!,
+      gameId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}game_id'],
+      ),
       controllerCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}controller_count'],
@@ -1945,6 +2515,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
   final String id;
   final String sessionId;
   final String roomId;
+  final String? gameId;
   final int controllerCount;
   final DateTime startedAt;
   final DateTime? endedAt;
@@ -1954,6 +2525,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     required this.id,
     required this.sessionId,
     required this.roomId,
+    this.gameId,
     this.controllerCount = 1,
     required this.startedAt,
     this.endedAt,
@@ -1966,6 +2538,9 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     map['id'] = Variable<String>(id);
     map['session_id'] = Variable<String>(sessionId);
     map['room_id'] = Variable<String>(roomId);
+    if (!nullToAbsent || gameId != null) {
+      map['game_id'] = Variable<String>(gameId);
+    }
     map['controller_count'] = Variable<int>(controllerCount);
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || endedAt != null) {
@@ -1981,6 +2556,9 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: Value(id),
       sessionId: Value(sessionId),
       roomId: Value(roomId),
+      gameId: gameId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gameId),
       controllerCount: Value(controllerCount),
       startedAt: Value(startedAt),
       endedAt: endedAt == null && nullToAbsent
@@ -2000,6 +2578,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: serializer.fromJson<String>(json['id']),
       sessionId: serializer.fromJson<String>(json['sessionId']),
       roomId: serializer.fromJson<String>(json['roomId']),
+      gameId: serializer.fromJson<String?>(json['gameId']),
       controllerCount: serializer.fromJson<int>(json['controllerCount']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
@@ -2016,6 +2595,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       'id': serializer.toJson<String>(id),
       'sessionId': serializer.toJson<String>(sessionId),
       'roomId': serializer.toJson<String>(roomId),
+      'gameId': serializer.toJson<String?>(gameId),
       'controllerCount': serializer.toJson<int>(controllerCount),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'endedAt': serializer.toJson<DateTime?>(endedAt),
@@ -2028,6 +2608,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     String? id,
     String? sessionId,
     String? roomId,
+    Value<String?> gameId = const Value.absent(),
     int? controllerCount,
     DateTime? startedAt,
     Value<DateTime?> endedAt = const Value.absent(),
@@ -2037,6 +2618,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
     roomId: roomId ?? this.roomId,
+    gameId: gameId.present ? gameId.value : this.gameId,
     controllerCount: controllerCount ?? this.controllerCount,
     startedAt: startedAt ?? this.startedAt,
     endedAt: endedAt.present ? endedAt.value : this.endedAt,
@@ -2048,6 +2630,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
       id: data.id.present ? data.id.value : this.id,
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       roomId: data.roomId.present ? data.roomId.value : this.roomId,
+      gameId: data.gameId.present ? data.gameId.value : this.gameId,
       controllerCount: data.controllerCount.present
           ? data.controllerCount.value
           : this.controllerCount,
@@ -2066,6 +2649,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('roomId: $roomId, ')
+          ..write('gameId: $gameId, ')
           ..write('controllerCount: $controllerCount, ')
           ..write('startedAt: $startedAt, ')
           ..write('endedAt: $endedAt, ')
@@ -2080,6 +2664,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
     id,
     sessionId,
     roomId,
+    gameId,
     controllerCount,
     startedAt,
     endedAt,
@@ -2093,6 +2678,7 @@ class SessionSegment extends DataClass implements Insertable<SessionSegment> {
           other.id == this.id &&
           other.sessionId == this.sessionId &&
           other.roomId == this.roomId &&
+          other.gameId == this.gameId &&
           other.controllerCount == this.controllerCount &&
           other.startedAt == this.startedAt &&
           other.endedAt == this.endedAt &&
@@ -2104,6 +2690,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
   final Value<String> id;
   final Value<String> sessionId;
   final Value<String> roomId;
+  final Value<String?> gameId;
   final Value<int> controllerCount;
   final Value<DateTime> startedAt;
   final Value<DateTime?> endedAt;
@@ -2114,6 +2701,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.roomId = const Value.absent(),
+    this.gameId = const Value.absent(),
     this.controllerCount = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.endedAt = const Value.absent(),
@@ -2125,6 +2713,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     required String id,
     required String sessionId,
     required String roomId,
+    this.gameId = const Value.absent(),
     this.controllerCount = const Value.absent(),
     required DateTime startedAt,
     this.endedAt = const Value.absent(),
@@ -2140,6 +2729,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     Expression<String>? id,
     Expression<String>? sessionId,
     Expression<String>? roomId,
+    Expression<String>? gameId,
     Expression<int>? controllerCount,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? endedAt,
@@ -2151,6 +2741,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
       if (id != null) 'id': id,
       if (sessionId != null) 'session_id': sessionId,
       if (roomId != null) 'room_id': roomId,
+      if (gameId != null) 'game_id': gameId,
       if (controllerCount != null) 'controller_count': controllerCount,
       if (startedAt != null) 'started_at': startedAt,
       if (endedAt != null) 'ended_at': endedAt,
@@ -2165,6 +2756,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     Value<String>? id,
     Value<String>? sessionId,
     Value<String>? roomId,
+    Value<String?>? gameId,
     Value<int>? controllerCount,
     Value<DateTime>? startedAt,
     Value<DateTime?>? endedAt,
@@ -2176,6 +2768,7 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       roomId: roomId ?? this.roomId,
+      gameId: gameId ?? this.gameId,
       controllerCount: controllerCount ?? this.controllerCount,
       startedAt: startedAt ?? this.startedAt,
       endedAt: endedAt ?? this.endedAt,
@@ -2196,6 +2789,9 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
     }
     if (roomId.present) {
       map['room_id'] = Variable<String>(roomId.value);
+    }
+    if (gameId.present) {
+      map['game_id'] = Variable<String>(gameId.value);
     }
     if (controllerCount.present) {
       map['controller_count'] = Variable<int>(controllerCount.value);
@@ -2224,6 +2820,8 @@ class SessionSegmentsCompanion extends UpdateCompanion<SessionSegment> {
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('roomId: $roomId, ')
+          ..write('gameId: $gameId, ')
+          ..write('controllerCount: $controllerCount, ')
           ..write('startedAt: $startedAt, ')
           ..write('endedAt: $endedAt, ')
           ..write('hourlyRateSnapshot: $hourlyRateSnapshot, ')
@@ -4621,6 +5219,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $RoomsTable rooms = $RoomsTable(this);
   late final $CustomersTable customers = $CustomersTable(this);
+  late final $GamesTable games = $GamesTable(this);
   late final $SessionsTable sessions = $SessionsTable(this);
   late final $SessionSegmentsTable sessionSegments = $SessionSegmentsTable(
     this,
@@ -4638,6 +5237,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     rooms,
     customers,
+    games,
     sessions,
     sessionSegments,
     sessionExtensions,

@@ -11,12 +11,18 @@ class ActiveRoomSession {
   final SessionSegment segment;
   final Room room;
   final Customer? customer;
+  final Game? game;
+  final DateTime? lastPauseTime;
+  final bool isFreeplay;
 
   ActiveRoomSession({
     required this.session,
     required this.segment,
     required this.room,
     this.customer,
+    this.game,
+    this.lastPauseTime,
+    this.isFreeplay = false,
   });
 }
 
@@ -24,6 +30,7 @@ class UnpaidSessionItem {
   final Session session;
   final Customer? customer;
   final Room room;
+  final Game? game;
   final Payment? payment;
   final DateTime endedAt;
   final double amountDue;
@@ -32,6 +39,7 @@ class UnpaidSessionItem {
     required this.session,
     this.customer,
     required this.room,
+    this.game,
     this.payment,
     required this.endedAt,
     required this.amountDue,
@@ -104,7 +112,7 @@ class SessionRepository {
   SessionRepository(this._db, [this._alarmService]);
 
   Stream<List<ActiveRoomSession>> watchActiveRoomSessions() {
-    // Join Sessions with active SessionSegments (endedAt is null), Room and optional Customer
+    // Join Sessions with active SessionSegments (endedAt is null), Room, optional Customer and Game
     final query = _db.select(_db.sessions).join([
       innerJoin(
         _db.sessionSegments,
@@ -119,17 +127,45 @@ class SessionRepository {
         _db.customers,
         _db.customers.id.equalsExp(_db.sessions.customerId),
       ),
+      leftOuterJoin(
+        _db.games,
+        _db.games.id.equalsExp(_db.sessionSegments.gameId),
+      ),
     ]);
 
-    return query.watch().map((rows) {
-      return rows.map((row) {
-        return ActiveRoomSession(
-          session: row.readTable(_db.sessions),
+    return query.watch().asyncMap((rows) async {
+      final list = <ActiveRoomSession>[];
+      for (final row in rows) {
+        final session = row.readTable(_db.sessions);
+        DateTime? lastPauseTime;
+        bool isFreeplay = false;
+
+        if (session.status == AppConstants.sessionPaused) {
+          final lastPause = await (_db.select(_db.sessionEvents)
+                ..where((t) => t.sessionId.equals(session.id) & t.eventType.equals('paused'))
+                ..orderBy([(t) => OrderingTerm(expression: t.eventTimestamp, mode: OrderingMode.desc)])
+                ..limit(1))
+              .getSingleOrNull();
+          lastPauseTime = lastPause?.eventTimestamp;
+        }
+
+        final fpEvent = await (_db.select(_db.sessionEvents)
+              ..where((t) => t.sessionId.equals(session.id) & t.eventType.equals('freeplay_enabled'))
+              ..limit(1))
+            .getSingleOrNull();
+        isFreeplay = fpEvent != null;
+
+        list.add(ActiveRoomSession(
+          session: session,
           segment: row.readTable(_db.sessionSegments),
           room: row.readTable(_db.rooms),
           customer: row.readTableOrNull(_db.customers),
-        );
-      }).toList();
+          game: row.readTableOrNull(_db.games),
+          lastPauseTime: lastPauseTime,
+          isFreeplay: isFreeplay,
+        ));
+      }
+      return list;
     });
   }
 
@@ -149,6 +185,7 @@ class SessionRepository {
     String? customerId,
     String? customerName,
     String? customerPhone,
+    String? gameId,
     int? playerCount,
     int? controllerCount,
     String? notes,
@@ -163,6 +200,12 @@ class SessionRepository {
       }
       if (room.status != AppConstants.statusAvailable) {
         throw Exception('Room "${room.roomName}" is not available (Current status: ${room.status})');
+      }
+
+      // Resolve optional Game selection & its hourly rate override
+      Game? selectedGame;
+      if (gameId != null && gameId.isNotEmpty) {
+        selectedGame = await (_db.select(_db.games)..where((t) => t.id.equals(gameId))).getSingleOrNull();
       }
 
       // 2. Handle Customer Resolution & Auto-Upsert
@@ -235,13 +278,15 @@ class SessionRepository {
       final effectiveControllers = (controllerCount != null && controllerCount >= 1 && controllerCount <= 6)
           ? controllerCount
           : 1;
-      final effectiveHourlyRate = room.hourlyRate * effectiveControllers;
+      final baseHourlyRate = selectedGame != null ? selectedGame.hourlyRate : room.hourlyRate;
+      final effectiveHourlyRate = baseHourlyRate * effectiveControllers;
 
       // 3. Insert Session
       await _db.into(_db.sessions).insert(
             SessionsCompanion(
               id: Value(sid),
               customerId: Value(resolvedCustomerId),
+              gameId: Value(selectedGame?.id),
               controllerCount: Value(effectiveControllers),
               status: const Value(AppConstants.sessionActive),
               startedAt: Value(now),
@@ -254,13 +299,14 @@ class SessionRepository {
             ),
           );
 
-      // 4. Insert initial SessionSegment with Room's current price snapshot multiplied by controllers
+      // 4. Insert initial SessionSegment with Room or Game price snapshot multiplied by controllers
       final segmentId = _uuid.v4();
       await _db.into(_db.sessionSegments).insert(
             SessionSegmentsCompanion(
               id: Value(segmentId),
               sessionId: Value(sid),
               roomId: Value(roomId),
+              gameId: Value(selectedGame?.id),
               controllerCount: Value(effectiveControllers),
               startedAt: Value(now),
               hourlyRateSnapshot: Value(effectiveHourlyRate),
@@ -277,13 +323,14 @@ class SessionRepository {
       );
 
       // 6. Record Audit Event
+      final gameNote = selectedGame != null ? ' | Game: ${selectedGame.title} (@ ₹${selectedGame.hourlyRate}/hr)' : '';
       await _db.into(_db.sessionEvents).insert(
             SessionEventsCompanion(
               id: Value(_uuid.v4()),
               sessionId: Value(sid),
               eventType: const Value('started'),
               eventTimestamp: Value(now),
-              newValue: Value('Duration: $durationMinutes min | Controllers: $effectiveControllers | Rate: ₹$effectiveHourlyRate/hr (₹${room.hourlyRate} × $effectiveControllers)'),
+              newValue: Value('Duration: $durationMinutes min | Controllers: $effectiveControllers$gameNote | Rate: ₹$effectiveHourlyRate/hr (₹$baseHourlyRate × $effectiveControllers)'),
               notes: Value(notes?.trim()),
             ),
           );
@@ -467,6 +514,16 @@ class SessionRepository {
           .getSingleOrNull();
 
       if (activeSegment != null) {
+        // If billing during pause is disabled, push active segment startedAt forward
+        final billOnPause = _alarmService != null ? await _alarmService.isBillOnPauseEnabled() : false;
+        if (!billOnPause && pauseDuration > Duration.zero) {
+          await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(activeSegment.id))).write(
+            SessionSegmentsCompanion(
+              startedAt: Value(activeSegment.startedAt.add(pauseDuration)),
+            ),
+          );
+        }
+
         final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
         if (room != null) {
           roomName = room.roomName;
@@ -504,9 +561,12 @@ class SessionRepository {
 
   /// Transfer customer session to a new room: closes old segment at its rate snapshot,
   /// frees old room, opens new segment at new rate snapshot, marks destination room OCCUPIED.
+  /// Also allows carrying over the same game, switching to another game, or resetting to default room rate.
   Future<void> transferRoom({
     required String sessionId,
     required String destinationRoomId,
+    String? destinationGameId,
+    bool keepCurrentGame = true,
   }) async {
     String destRoomName = '';
     DateTime scheduledEnd = DateTime.now();
@@ -534,13 +594,33 @@ class SessionRepository {
 
       final originRoom = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
 
+      // Resolve destination game: explicit game or keep current game or none (room rate)
+      String? resolvedGameId;
+      if (destinationGameId != null && destinationGameId.isNotEmpty) {
+        resolvedGameId = destinationGameId;
+      } else if (keepCurrentGame) {
+        resolvedGameId = activeSegment.gameId ?? session.gameId;
+      } else {
+        resolvedGameId = null;
+      }
+
+      Game? targetGame;
+      if (resolvedGameId != null) {
+        targetGame = await (_db.select(_db.games)..where((t) => t.id.equals(resolvedGameId!))).getSingleOrNull();
+      }
+
       // 3. Close the active segment: calculate played minutes & charge snapshot
-      final segmentMinutes = now.difference(activeSegment.startedAt).inSeconds / 60.0;
+      final effectiveSegmentEnd = await getEffectiveSegmentEndTime(
+        session: session,
+        segment: activeSegment,
+        now: now,
+      );
+      final segmentMinutes = effectiveSegmentEnd.difference(activeSegment.startedAt).inSeconds / 60.0;
       final segmentAmount = (segmentMinutes / 60.0) * activeSegment.hourlyRateSnapshot;
 
       await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(activeSegment.id))).write(
         SessionSegmentsCompanion(
-          endedAt: Value(now),
+          endedAt: Value(effectiveSegmentEnd),
           amount: Value(segmentAmount),
         ),
       );
@@ -553,20 +633,30 @@ class SessionRepository {
         ),
       );
 
-      // 5. Create new SessionSegment with destination room's rate snapshot multiplied by controllers
-      final effectiveDestRate = destRoom.hourlyRate * session.controllerCount;
+      // 5. Create new SessionSegment with destination rate snapshot multiplied by controllers
+      final baseRate = targetGame != null ? targetGame.hourlyRate : destRoom.hourlyRate;
+      final effectiveDestRate = baseRate * session.controllerCount;
       final newSegmentId = _uuid.v4();
+
       await _db.into(_db.sessionSegments).insert(
             SessionSegmentsCompanion(
               id: Value(newSegmentId),
               sessionId: Value(sessionId),
               roomId: Value(destinationRoomId),
+              gameId: Value(targetGame?.id),
               controllerCount: Value(session.controllerCount),
               startedAt: Value(now),
               hourlyRateSnapshot: Value(effectiveDestRate),
               amount: const Value(0.0),
             ),
           );
+
+      // Update Session's current game
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        SessionsCompanion(
+          gameId: Value(targetGame?.id),
+        ),
+      );
 
       // 6. Set Destination Room status to OCCUPIED
       await (_db.update(_db.rooms)..where((t) => t.id.equals(destinationRoomId))).write(
@@ -577,6 +667,7 @@ class SessionRepository {
       );
 
       // 7. Log Transfer in SessionEvents
+      final gameNote = targetGame != null ? ' | Game: ${targetGame.title}' : ' | Room Default Rate';
       await _db.into(_db.sessionEvents).insert(
             SessionEventsCompanion(
               id: Value(_uuid.v4()),
@@ -584,7 +675,7 @@ class SessionRepository {
               eventType: const Value('transferred'),
               eventTimestamp: Value(now),
               oldValue: Value('${originRoom?.roomName ?? "Room"} (₹${activeSegment.hourlyRateSnapshot}/hr)'),
-              newValue: Value('${destRoom.roomName} (₹${destRoom.hourlyRate}/hr)'),
+              newValue: Value('${destRoom.roomName} (₹$effectiveDestRate/hr$gameNote)'),
             ),
           );
     });
@@ -598,6 +689,158 @@ class SessionRepository {
         scheduledEndAt: scheduledEnd,
       );
     }
+  }
+
+  /// Mid-session game change: closes current active segment with its accumulated amount,
+  /// starts a new segment on the same room with the new game's rate (or room rate if newGameId is null),
+  /// and updates session's gameId and audit events.
+  Future<void> changeGame({
+    required String sessionId,
+    String? newGameId,
+  }) async {
+    await _db.transaction(() async {
+      final now = DateTime.now();
+
+      final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+      if (session == null) throw Exception('Session not found: $sessionId');
+
+      final activeSegment = await (_db.select(_db.sessionSegments)
+            ..where((t) => t.sessionId.equals(sessionId) & t.endedAt.isNull()))
+          .getSingleOrNull();
+      if (activeSegment == null) throw Exception('No active segment found for session $sessionId');
+
+      final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(activeSegment.roomId))).getSingleOrNull();
+      if (room == null) throw Exception('Room not found for active segment');
+
+      Game? newGame;
+      if (newGameId != null && newGameId.isNotEmpty) {
+        newGame = await (_db.select(_db.games)..where((t) => t.id.equals(newGameId))).getSingleOrNull();
+      }
+
+      // 1. Close current segment with accumulated amount
+      final effectiveSegmentEnd = await getEffectiveSegmentEndTime(
+        session: session,
+        segment: activeSegment,
+        now: now,
+      );
+      final segmentMinutes = effectiveSegmentEnd.difference(activeSegment.startedAt).inSeconds / 60.0;
+      final segmentAmount = (segmentMinutes / 60.0) * activeSegment.hourlyRateSnapshot;
+
+      await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(activeSegment.id))).write(
+        SessionSegmentsCompanion(
+          endedAt: Value(effectiveSegmentEnd),
+          amount: Value(segmentAmount),
+        ),
+      );
+
+      // 2. Open new segment for the same room with new game / room rate
+      final baseRate = newGame != null ? newGame.hourlyRate : room.hourlyRate;
+      final effectiveRate = baseRate * session.controllerCount;
+      final newSegmentId = _uuid.v4();
+
+      await _db.into(_db.sessionSegments).insert(
+            SessionSegmentsCompanion(
+              id: Value(newSegmentId),
+              sessionId: Value(sessionId),
+              roomId: Value(room.id),
+              gameId: Value(newGame?.id),
+              controllerCount: Value(session.controllerCount),
+              startedAt: Value(now),
+              hourlyRateSnapshot: Value(effectiveRate),
+              amount: const Value(0.0),
+            ),
+          );
+
+      // 3. Update session's gameId
+      await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+        SessionsCompanion(
+          gameId: Value(newGame?.id),
+        ),
+      );
+
+      // 4. Log Session Event
+      await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion(
+              id: Value(_uuid.v4()),
+              sessionId: Value(sessionId),
+              eventType: const Value('GAME_CHANGED'),
+              eventTimestamp: Value(now),
+              notes: Value(newGame != null
+                  ? 'Game changed to "${newGame.title}" @ ₹${newGame.hourlyRate}/hr (Total: ₹$effectiveRate/hr)'
+                  : 'Game cleared: switched to Room default rate @ ₹${room.hourlyRate}/hr (Total: ₹$effectiveRate/hr)'),
+            ),
+          );
+    });
+  }
+
+  /// Checks whether freeplay / freestyle overtime has been explicitly activated for this session
+  Future<bool> isFreeplayActive(String sessionId) async {
+    final event = await (_db.select(_db.sessionEvents)
+          ..where((t) => t.sessionId.equals(sessionId) & t.eventType.equals('freeplay_enabled'))
+          ..limit(1))
+        .getSingleOrNull();
+    return event != null;
+  }
+
+  /// Activates Freeplay / Freestyle for a session (overtime is now billable)
+  Future<void> enableFreeplay(String sessionId) async {
+    final now = DateTime.now();
+    await _db.into(_db.sessionEvents).insert(
+          SessionEventsCompanion(
+            id: Value(_uuid.v4()),
+            sessionId: Value(sessionId),
+            eventType: const Value('freeplay_enabled'),
+            eventTimestamp: Value(now),
+            newValue: Value('Freeplay activated at $now'),
+          ),
+        );
+
+    final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+    if (session != null && session.status == AppConstants.sessionPaused) {
+      await resumeSession(sessionId: sessionId);
+    }
+  }
+
+  /// Calculates the effective billable end time for a segment:
+  /// 1. Mid-session pause: if bill-on-pause is disabled and session is currently paused, freeze end time at pause start.
+  /// 2. Timer expiry: if timer reached scheduled end and neither freeplay nor auto-overtime is enabled, cap at scheduledEndAt.
+  Future<DateTime> getEffectiveSegmentEndTime({
+    required Session session,
+    required SessionSegment segment,
+    DateTime? now,
+  }) async {
+    final currentTime = now ?? DateTime.now();
+    DateTime effectiveEnd = segment.endedAt ?? currentTime;
+
+    final billOnPause = _alarmService != null ? await _alarmService.isBillOnPauseEnabled() : false;
+    final autoOvertime = _alarmService != null ? await _alarmService.isAutoOvertimeEnabled() : false;
+    final isFreeplay = await isFreeplayActive(session.id);
+
+    // 1. If currently paused and billing during pause is disabled, freeze end at the moment it was paused
+    if (!billOnPause && session.status == AppConstants.sessionPaused && segment.endedAt == null) {
+      final lastPause = await (_db.select(_db.sessionEvents)
+            ..where((t) => t.sessionId.equals(session.id) & t.eventType.equals('paused'))
+            ..orderBy([(t) => OrderingTerm(expression: t.eventTimestamp, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
+      if (lastPause != null && lastPause.eventTimestamp.isBefore(effectiveEnd)) {
+        effectiveEnd = lastPause.eventTimestamp;
+      }
+    }
+
+    // 2. Timer Expiry Rule:
+    // If not in Freeplay and autoOvertime is disabled, billing CANNOT exceed scheduledEndAt!
+    if (!isFreeplay && !autoOvertime) {
+      if (effectiveEnd.isAfter(session.scheduledEndAt)) {
+        effectiveEnd = session.scheduledEndAt;
+      }
+    }
+
+    if (effectiveEnd.isBefore(segment.startedAt)) {
+      effectiveEnd = segment.startedAt;
+    }
+
+    return effectiveEnd;
   }
 
   /// Calculate live billing preview for an ongoing session
@@ -618,13 +861,23 @@ class SessionRepository {
 
     for (final segment in segments) {
       final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+      final game = segment.gameId != null
+          ? await (_db.select(_db.games)..where((t) => t.id.equals(segment.gameId!))).getSingleOrNull()
+          : null;
       final segmentStart = segment.startedAt;
-      final segmentEnd = segment.endedAt ?? now;
+      final segmentEnd = await getEffectiveSegmentEndTime(
+        session: session,
+        segment: segment,
+        now: now,
+      );
 
       final segDetails = BillingEngine.buildSegmentDetails(
         roomId: segment.roomId,
         roomName: room?.roomName ?? 'Gaming Room',
         equipmentType: room?.equipmentType ?? 'Console',
+        gameTitle: game?.title,
+        gameId: segment.gameId,
+        controllerCount: segment.controllerCount,
         startedAt: segmentStart,
         endedAt: segmentEnd,
         hourlyRateSnapshot: segment.hourlyRateSnapshot,
@@ -675,9 +928,14 @@ class SessionRepository {
 
       for (final segment in segments) {
         final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+        final game = segment.gameId != null
+            ? await (_db.select(_db.games)..where((t) => t.id.equals(segment.gameId!))).getSingleOrNull()
+            : null;
         final isUnclosed = segment.endedAt == null;
         final segmentStart = segment.startedAt;
-        final segmentEnd = isUnclosed ? now : segment.endedAt!;
+        final segmentEnd = isUnclosed
+            ? await getEffectiveSegmentEndTime(session: session, segment: segment, now: now)
+            : segment.endedAt!;
         final segmentDuration = segmentEnd.difference(segmentStart);
         calculatedTotalDurationSeconds += segmentDuration.inSeconds;
 
@@ -685,6 +943,8 @@ class SessionRepository {
           roomId: segment.roomId,
           roomName: room?.roomName ?? 'Gaming Room',
           equipmentType: room?.equipmentType ?? 'Console',
+          gameTitle: game?.title,
+          gameId: segment.gameId,
           controllerCount: segment.controllerCount,
           startedAt: segmentStart,
           endedAt: segmentEnd,
@@ -698,7 +958,7 @@ class SessionRepository {
           activeRoomId = segment.roomId;
           await (_db.update(_db.sessionSegments)..where((t) => t.id.equals(segment.id))).write(
             SessionSegmentsCompanion(
-              endedAt: Value(now),
+              endedAt: Value(segmentEnd),
               amount: Value(segDetails.amount),
             ),
           );
@@ -769,10 +1029,15 @@ class SessionRepository {
             ),
           );
 
+      final primaryGame = session.gameId != null
+          ? await (_db.select(_db.games)..where((t) => t.id.equals(session.gameId!))).getSingleOrNull()
+          : null;
+
       receiptData = SessionReceiptData(
         sessionId: sessionId,
         customerName: customer?.name,
         customerPhone: customer?.phone,
+        gameTitle: primaryGame?.title,
         controllerCount: session.controllerCount,
         startedAt: session.startedAt,
         endedAt: now,
@@ -894,12 +1159,17 @@ class SessionRepository {
     final segmentBillingList = <SegmentBillingDetails>[];
     for (final segment in segments) {
       final room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
+      final game = segment.gameId != null
+          ? await (_db.select(_db.games)..where((t) => t.id.equals(segment.gameId!))).getSingleOrNull()
+          : null;
       final segEnd = segment.endedAt ?? session.endedAt ?? DateTime.now();
       segmentBillingList.add(
         BillingEngine.buildSegmentDetails(
           roomId: segment.roomId,
           roomName: room?.roomName ?? 'Gaming Room',
           equipmentType: room?.equipmentType ?? 'Console',
+          gameTitle: game?.title,
+          gameId: segment.gameId,
           controllerCount: segment.controllerCount,
           startedAt: segment.startedAt,
           endedAt: segEnd,
@@ -915,10 +1185,15 @@ class SessionRepository {
     final gross = segmentBillingList.fold<double>(0.0, (sum, seg) => sum + seg.amount);
     final discount = (gross - session.totalAmount) > 0 ? (gross - session.totalAmount) : 0.0;
 
+    final primaryGame = session.gameId != null
+        ? await (_db.select(_db.games)..where((t) => t.id.equals(session.gameId!))).getSingleOrNull()
+        : null;
+
     return SessionReceiptData(
       sessionId: session.id,
       customerName: customer?.name,
       customerPhone: customer?.phone,
+      gameTitle: primaryGame?.title,
       controllerCount: session.controllerCount,
       startedAt: session.startedAt,
       endedAt: session.endedAt ?? DateTime.now(),
@@ -960,6 +1235,11 @@ class SessionRepository {
           room = await (_db.select(_db.rooms)..where((t) => t.id.equals(lastSegment.roomId))).getSingleOrNull();
         }
 
+        Game? game;
+        if (session.gameId != null) {
+          game = await (_db.select(_db.games)..where((t) => t.id.equals(session.gameId!))).getSingleOrNull();
+        }
+
         final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(session.id))).getSingleOrNull();
 
         if (room != null) {
@@ -968,6 +1248,7 @@ class SessionRepository {
               session: session,
               customer: customer,
               room: room,
+              game: game,
               payment: payment,
               endedAt: session.endedAt ?? session.scheduledEndAt,
               amountDue: session.totalAmount,

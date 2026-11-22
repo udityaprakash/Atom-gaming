@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/app_update_service.dart';
-import '../../../core/services/security_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/neon_button.dart';
+import '../../games/presentation/games_screen.dart';
 import '../../reservations/presentation/reservations_screen.dart';
 import 'about_screen.dart';
 import 'business_profile_screen.dart';
@@ -146,6 +146,19 @@ class SettingsScreen extends ConsumerWidget {
 
           _buildTile(
             context: context,
+            title: 'Games Catalog & Hourly Pricing',
+            subtitle: 'Configure titles, custom hourly rates, and console platforms',
+            icon: Icons.sports_esports_outlined,
+            trailingText: 'Catalog',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GamesScreen()),
+              );
+            },
+          ),
+          _buildTile(
+            context: context,
             title: 'Advance Console Reservations',
             subtitle: 'Slot booking with automated conflict checking',
             icon: Icons.event_available_outlined,
@@ -172,8 +185,8 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _buildTile(
             context: context,
-            title: 'Background Alarms & Notifications',
-            subtitle: 'Configure sounds, vibration, and exact alarm schedules',
+            title: 'Timers, Alarms & Billing Rules',
+            subtitle: 'Pause billing behavior, auto-overtime expiry, buzzer and vibration',
             icon: Icons.alarm,
             trailingText: 'Configure',
             onTap: () {

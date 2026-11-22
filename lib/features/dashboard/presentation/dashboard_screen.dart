@@ -30,32 +30,23 @@ class DashboardScreen extends ConsumerWidget {
               child: const Icon(Icons.sports_esports, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ATOM',
-                  style: GoogleFonts.orbitron(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  'LIVE OCCUPANCY DASHBOARD',
-                  style: GoogleFonts.rajdhani(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
+            Text(
+              'ATOM',
+              style: GoogleFonts.orbitron(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+                color: AppColors.textPrimary,
+              ),
             ),
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sports_esports_outlined, color: AppColors.secondary),
+            tooltip: 'Games & Pricing Catalog',
+            onPressed: () => context.push('/games'),
+          ),
           IconButton(
             icon: const Icon(Icons.event_available_outlined, color: AppColors.accent),
             tooltip: 'Advance Reservations',
@@ -182,7 +173,7 @@ class DashboardScreen extends ConsumerWidget {
                       crossAxisCount: 2,
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
-                      childAspectRatio: 0.58,
+                      childAspectRatio: 0.53,
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {

@@ -9,6 +9,8 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
 import '../../../../shared/widgets/neon_button.dart';
 import '../../../customers/providers/customer_provider.dart';
+import '../../../games/presentation/widgets/add_edit_game_dialog.dart';
+import '../../../games/providers/game_provider.dart';
 import '../../providers/session_provider.dart';
 
 class StartSessionSheet extends ConsumerStatefulWidget {
@@ -41,6 +43,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
   final _phoneController = TextEditingController();
   final _notesController = TextEditingController();
   late int _controllerCount;
+  Game? _selectedGame;
   bool _isSubmitting = false;
 
   String? _selectedCustomerId;
@@ -147,9 +150,12 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
   int get _effectiveDurationMinutes =>
       _isCustomDuration ? (_customHours * 60 + _customMinutes) : _selectedDurationMinutes;
 
+  double get _effectiveBaseRate => _selectedGame != null ? _selectedGame!.hourlyRate : widget.room.hourlyRate;
+  double get _effectiveHourlyRate => _effectiveBaseRate * _controllerCount;
+
   double get _estimatedCharge {
     final hours = _effectiveDurationMinutes / 60.0;
-    return (hours * widget.room.hourlyRate * _controllerCount).roundToDouble();
+    return (hours * _effectiveHourlyRate).roundToDouble();
   }
 
   @override
@@ -193,44 +199,52 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'START SESSION',
-                      style: GoogleFonts.orbitron(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.available,
-                        letterSpacing: 1,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'START SESSION',
+                        style: GoogleFonts.orbitron(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.available,
+                          letterSpacing: 1,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${widget.room.roomName} • ${widget.room.equipmentType}',
-                      style: GoogleFonts.rajdhani(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                      const SizedBox(height: 2),
+                      Text(
+                        '${widget.room.roomName} • ${widget.room.equipmentType}',
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
+                    color: _selectedGame != null
+                        ? AppColors.error.withValues(alpha: 0.15)
+                        : AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: _selectedGame != null
+                          ? AppColors.error.withValues(alpha: 0.5)
+                          : AppColors.primary.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Text(
-                    _controllerCount > 1
-                        ? '${CurrencyFormatter.format(widget.room.hourlyRate * _controllerCount)}/hr (${CurrencyFormatter.format(widget.room.hourlyRate)} × ${_controllerCount}P)'
-                        : '${CurrencyFormatter.format(widget.room.hourlyRate)}/hr',
+                    '${CurrencyFormatter.format(_effectiveHourlyRate)}/hr',
                     style: GoogleFonts.orbitron(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                      color: _selectedGame != null ? AppColors.error : AppColors.primary,
                     ),
                   ),
                 ),
@@ -322,6 +336,170 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                 );
               }),
             ),
+            const SizedBox(height: 16),
+
+            // Game Selection (Optional - Overrides Room Rate)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'GAME CHOICE (OPTIONAL)',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Row(
+                  children: [
+                    if (_selectedGame != null)
+                      InkWell(
+                        onTap: () => setState(() => _selectedGame = null),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Text(
+                            'RESET',
+                            style: GoogleFonts.orbitron(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () {
+                        showDialog<Game>(
+                          context: context,
+                          builder: (_) => AddEditGameDialog(
+                            onGameCreated: (newGame) {
+                              if (mounted) setState(() => _selectedGame = newGame);
+                            },
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add, size: 12, color: AppColors.primary),
+                            const SizedBox(width: 2),
+                            Text(
+                              'NEW',
+                              style: GoogleFonts.orbitron(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            ref.watch(activeGamesStreamProvider).when(
+              data: (games) {
+                return DropdownButtonFormField<String?>(
+                  value: _selectedGame?.id,
+                  isExpanded: true,
+                  dropdownColor: AppColors.surfaceElevated,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.sports_esports, size: 18, color: AppColors.primary),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    hintText: 'None - Default Room Rate (${CurrencyFormatter.format(widget.room.hourlyRate)}/hr)',
+                  ),
+                  style: GoogleFonts.rajdhani(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(
+                        'None (Default Room Rate: ${CurrencyFormatter.format(widget.room.hourlyRate)}/hr)',
+                        style: GoogleFonts.rajdhani(fontSize: 14, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    ...games.map((g) {
+                      final plat = g.platform != null ? '[${g.platform}] ' : '';
+                      return DropdownMenuItem<String?>(
+                        value: g.id,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '$plat${g.title}',
+                                style: GoogleFonts.orbitron(fontSize: 12, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.available.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${CurrencyFormatter.format(g.hourlyRate)}/hr',
+                                style: GoogleFonts.orbitron(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.available),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  onChanged: (selectedId) {
+                    setState(() {
+                      if (selectedId == null) {
+                        _selectedGame = null;
+                      } else {
+                        try {
+                          _selectedGame = games.firstWhere((g) => g.id == selectedId);
+                        } catch (_) {
+                          _selectedGame = null;
+                        }
+                      }
+                    });
+                  },
+                );
+              },
+              loading: () => const LinearProgressIndicator(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+
+            if (_selectedGame != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 14, color: AppColors.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Overriding Room rate (${CurrencyFormatter.format(widget.room.hourlyRate)}) with ${_selectedGame!.title} @ ${CurrencyFormatter.format(_selectedGame!.hourlyRate)}/hr per player',
+                        style: GoogleFonts.rajdhani(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.accent),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Duration Presets
@@ -653,13 +831,11 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
                         ),
                       ),
                       Text(
-                        _controllerCount > 1
-                            ? '${CurrencyFormatter.format(widget.room.hourlyRate * _controllerCount)}/hr (${CurrencyFormatter.format(widget.room.hourlyRate)} × $_controllerCount)'
-                            : '${CurrencyFormatter.format(widget.room.hourlyRate)}/hr',
+                        '${CurrencyFormatter.format(_effectiveHourlyRate)}/hr',
                         style: GoogleFonts.orbitron(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
+                          color: _selectedGame != null ? AppColors.error : AppColors.primary,
                         ),
                       ),
                     ],
@@ -726,6 +902,7 @@ class _StartSessionSheetState extends ConsumerState<StartSessionSheet> {
         customerId: _selectedCustomerId,
         customerName: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : null,
         customerPhone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : null,
+        gameId: _selectedGame?.id,
         playerCount: _controllerCount,
         controllerCount: _controllerCount,
         notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,

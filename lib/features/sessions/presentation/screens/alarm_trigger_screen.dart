@@ -59,8 +59,8 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
   Future<void> _handleFreeStyle() async {
     ref.read(alarmServiceProvider).stopContinuousBuzzer();
     final repo = ref.read(sessionRepositoryProvider);
-    // If the session was auto-paused on expiry, resume it so overtime timer runs freely
-    await repo.resumeSession(sessionId: widget.activeSession.session.id);
+    // Enable Freeplay so overtime billing starts, and resume session if paused
+    await repo.enableFreeplay(widget.activeSession.session.id);
 
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop();

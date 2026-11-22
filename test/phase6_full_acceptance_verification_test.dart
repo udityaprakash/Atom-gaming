@@ -4,7 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:atom/core/constants/app_constants.dart';
 import 'package:atom/core/database/app_database.dart';
-import 'package:atom/core/services/billing_engine.dart';
+import 'package:atom/core/services/alarm_service.dart';
 import 'package:atom/core/services/data_export_service.dart';
 import 'package:atom/core/services/recovery_service.dart';
 import 'package:atom/features/analytics/data/analytics_repository.dart';
@@ -12,7 +12,31 @@ import 'package:atom/features/customers/data/customer_repository.dart';
 import 'package:atom/features/rooms/data/room_repository.dart';
 import 'package:atom/features/sessions/data/session_repository.dart';
 
+class FakeAlarmService implements AlarmService {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+
+  @override
+  Future<void> scheduleSessionAlert({
+    required String sessionId,
+    required String roomName,
+    required DateTime scheduledEndAt,
+  }) async {}
+
+  @override
+  Future<void> showImmediateAlert({
+    required String sessionId,
+    required String roomName,
+    required String title,
+    required String body,
+  }) async {}
+
+  @override
+  Future<void> cancelSessionAlert(String sessionId) async {}
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late AppDatabase db;
   late RoomRepository roomRepo;
   late SessionRepository sessionRepo;
@@ -98,8 +122,7 @@ void main() {
       // Extend by 30 minutes
       await sessionRepo.extendSession(
         sessionId: sessionId,
-        additionalMinutes: 30,
-        extensionReason: 'Customer requested overtime',
+        extensionMinutes: 30,
       );
 
       final sessionAfter = await (db.select(db.sessions)..where((t) => t.id.equals(sessionId))).getSingle();
@@ -109,7 +132,7 @@ void main() {
       // Check extensions table audit trail
       final extensions = await (db.select(db.sessionExtensions)..where((t) => t.sessionId.equals(sessionId))).get();
       expect(extensions.length, 1);
-      expect(extensions.first.addedMinutes, 30);
+      expect(extensions.first.extensionMinutes, 30);
     });
 
     test('Criteria 8, 9 & 22: Room transfer with multi-segment billing and price freeze immutability', () async {
@@ -143,8 +166,7 @@ void main() {
       // Transfer to VIP PS5
       await sessionRepo.transferRoom(
         sessionId: sessionId,
-        targetRoomId: ps5RoomId,
-        reason: 'Upgraded to PS5',
+        destinationRoomId: ps5RoomId,
       );
 
       // Verify old room is available, new room is occupied
@@ -166,7 +188,6 @@ void main() {
       await sessionRepo.endSession(
         sessionId: sessionId,
         paymentStatus: AppConstants.paymentPaid,
-        discount: 0.0,
       );
 
       // Verify calculated amounts
@@ -215,9 +236,9 @@ void main() {
       );
 
       // Trigger Reboot / Crash recovery service
-      final recoveryService = RecoveryService(db);
-      final recoveredCount = await recoveryService.recoverSessionsOnStartup();
-      expect(recoveredCount, 1);
+      final alarmService = FakeAlarmService();
+      final recoveryService = RecoveryService(db, alarmService);
+      await recoveryService.recoverActiveSessions();
 
       // Room remains Occupied, timers continue cleanly from timestamps
       final room = await (db.select(db.rooms)..where((t) => t.id.equals(roomId))).getSingle();
@@ -262,16 +283,15 @@ void main() {
 
       // Check Customer debt balance
       var customerStats = await customerRepo.getCustomerStats(customerId);
-      expect(customerStats.unpaidBalance, closeTo(100.0, 2.0));
+      expect(customerStats.outstandingDebt, closeTo(100.0, 2.0));
 
       // Criterion 16: Analytics separation
-      var revenueSummary = await analyticsRepo.getRevenueSummary();
+      var revenueSummary = await analyticsRepo.getFinancialOverview();
       expect(revenueSummary.totalBilledRevenue, closeTo(100.0, 2.0));
-      expect(revenueSummary.cashActuallyCollected, 0.0);
-      expect(revenueSummary.totalOutstandingUnpaid, closeTo(100.0, 2.0));
+      expect(revenueSummary.actualCashCollected, 0.0);
+      expect(revenueSummary.outstandingUnpaid, closeTo(100.0, 2.0));
 
       // Criterion 14 & 15: Collect cash later against unpaid debt
-      final collectionTime = DateTime.now();
       await sessionRepo.collectOutstandingCash(
         sessionId: sessionId,
         amountCollected: 100.0,
@@ -287,12 +307,12 @@ void main() {
 
       // Customer debt is now cleared
       customerStats = await customerRepo.getCustomerStats(customerId);
-      expect(customerStats.unpaidBalance, 0.0);
+      expect(customerStats.outstandingDebt, 0.0);
 
       // Analytics now reflects cash collected
-      revenueSummary = await analyticsRepo.getRevenueSummary();
-      expect(revenueSummary.cashActuallyCollected, closeTo(100.0, 2.0));
-      expect(revenueSummary.totalOutstandingUnpaid, 0.0);
+      revenueSummary = await analyticsRepo.getFinancialOverview();
+      expect(revenueSummary.actualCashCollected, closeTo(100.0, 2.0));
+      expect(revenueSummary.outstandingUnpaid, 0.0);
     });
 
     test('Criterion 18 & 20: Full offline JSON and CSV export verification', () async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/receipt_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/time_formatter.dart';
@@ -12,6 +13,7 @@ import '../../billing/presentation/widgets/receipt_dialog.dart';
 import '../../rooms/providers/room_provider.dart';
 import '../data/session_repository.dart';
 import '../providers/session_provider.dart';
+import 'widgets/change_game_dialog.dart';
 import 'widgets/end_session_dialog.dart';
 import 'widgets/extend_session_sheet.dart';
 import 'widgets/session_timeline_dialog.dart';
@@ -601,11 +603,19 @@ class SessionsScreen extends ConsumerWidget {
     final segment = active.segment;
     final isPaused = session.status == AppConstants.sessionPaused;
 
-    final elapsed = now.difference(segment.startedAt);
+    DateTime effectiveTime = now;
+    if (isPaused && active.lastPauseTime != null) {
+      effectiveTime = active.lastPauseTime!;
+    } else if (!active.isFreeplay && now.isAfter(session.scheduledEndAt)) {
+      effectiveTime = session.scheduledEndAt;
+    }
+
+    final elapsed = (isPaused && active.lastPauseTime != null ? active.lastPauseTime! : now).difference(segment.startedAt);
     final remaining = session.scheduledEndAt.difference(now);
     final isOvertime = remaining.isNegative;
 
-    final elapsedMinutes = elapsed.inSeconds / 60.0;
+    final effectiveElapsed = effectiveTime.difference(segment.startedAt);
+    final elapsedMinutes = (effectiveElapsed.inSeconds > 0 ? effectiveElapsed.inSeconds : 0) / 60.0;
     final estimatedCharge = ((elapsedMinutes / 60.0) * segment.hourlyRateSnapshot).roundToDouble();
 
     return GlassCard(
@@ -639,7 +649,86 @@ class SessionsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
+
+          // Game played & Controller Count Pill (Tap to Change Game)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: InkWell(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => ChangeGameDialog(activeSession: active),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: active.game != null
+                            ? AppColors.accent.withValues(alpha: 0.15)
+                            : AppColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: active.game != null
+                              ? AppColors.accent.withValues(alpha: 0.4)
+                              : AppColors.cardBorder,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.sports_esports,
+                            size: 13,
+                            color: active.game != null ? AppColors.accent : AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              active.game != null ? active.game!.title : 'Room Rate',
+                              style: GoogleFonts.orbitron(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: active.game != null ? AppColors.accent : AppColors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 10, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 0.8),
+                  ),
+                  child: Text(
+                    ReceiptService.formatPlayerCount(session.controllerCount).toUpperCase(),
+                    style: GoogleFonts.orbitron(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
 
           // Customer details
           if (active.customer != null)
@@ -733,7 +822,7 @@ class SessionsScreen extends ConsumerWidget {
                 child: NeonButton(
                   label: isPaused ? 'RESUME' : 'PAUSE',
                   icon: isPaused ? Icons.play_arrow : Icons.pause,
-                  color: AppColors.paused,
+                  color: isPaused ? AppColors.available : AppColors.paused,
                   isOutlined: true,
                   height: 36,
                   fontSize: 12,
@@ -749,24 +838,44 @@ class SessionsScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
 
-              // End & Bill Button
+              // Change Game Button
               Expanded(
                 child: NeonButton(
-                  label: 'END & BILL',
-                  icon: Icons.stop_circle_outlined,
-                  color: AppColors.occupied,
+                  label: 'CHANGE GAME',
+                  icon: Icons.sports_esports,
+                  color: AppColors.accent,
+                  isOutlined: true,
                   height: 36,
                   fontSize: 12,
                   onPressed: () {
                     showDialog(
                       context: context,
-                      barrierDismissible: false,
-                      builder: (_) => EndSessionDialog(activeSession: active),
+                      builder: (_) => ChangeGameDialog(activeSession: active),
                     );
                   },
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+
+          // End & Bill Button (Full Width)
+          SizedBox(
+            width: double.infinity,
+            child: NeonButton(
+              label: 'END & BILL',
+              icon: Icons.stop_circle_outlined,
+              color: AppColors.occupied,
+              height: 38,
+              fontSize: 13,
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => EndSessionDialog(activeSession: active),
+                );
+              },
+            ),
           ),
         ],
       ),

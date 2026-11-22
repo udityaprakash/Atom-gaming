@@ -212,6 +212,10 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                     ],
                     const SizedBox(height: 4),
                     _buildMetaRow('PLAYERS', ReceiptService.formatPlayerCount(receiptData.controllerCount)),
+                    if (receiptData.gameTitle != null && receiptData.gameTitle!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _buildMetaRow('GAME PLAYED', receiptData.gameTitle!),
+                    ],
                     const SizedBox(height: 12),
                     const Divider(color: AppColors.cardBorder, height: 1),
                     const SizedBox(height: 12),
@@ -238,20 +242,63 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: AppColors.cardBorder.withValues(alpha: 0.5)),
                           ),
-                          child: Column(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    seg.roomName,
-                                    style: GoogleFonts.rajdhani(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary,
+                              // Left: Room, Equipment / Player / Rate, Game Title
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      seg.roomName,
+                                      style: GoogleFonts.rajdhani(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${seg.equipmentType} • ${ReceiptService.formatPlayerCount(seg.controllerCount)} • ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr',
+                                      style: GoogleFonts.rajdhani(
+                                        fontSize: 11,
+                                        color: AppColors.textMuted,
+                                        height: 1.2,
+                                      ),
+                                      softWrap: true,
+                                    ),
+                                    if (seg.gameTitle != null && seg.gameTitle!.isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text('🎮 ', style: TextStyle(fontSize: 10)),
+                                          Expanded(
+                                            child: Text(
+                                              seg.gameTitle!,
+                                              style: GoogleFonts.rajdhani(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.accent,
+                                                height: 1.2,
+                                              ),
+                                              softWrap: true,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+
+                              // Right: Amount & Duration
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
                                   Text(
                                     CurrencyFormatter.format(seg.amount),
                                     style: GoogleFonts.orbitron(
@@ -260,19 +307,7 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
                                       color: AppColors.primary,
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${seg.equipmentType} • ${ReceiptService.formatPlayerCount(seg.controllerCount)} • ${CurrencyFormatter.format(seg.hourlyRateSnapshot)}/hr',
-                                    style: GoogleFonts.rajdhani(
-                                      fontSize: 11,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ),
+                                  const SizedBox(height: 2),
                                   Text(
                                     TimeFormatter.formatDurationHuman(seg.duration),
                                     style: GoogleFonts.rajdhani(
@@ -471,6 +506,7 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
   Widget _buildMetaRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -480,12 +516,16 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.rajdhani(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: GoogleFonts.rajdhani(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
           ),
         ),
       ],
@@ -503,12 +543,16 @@ class _ReceiptDialogState extends ConsumerState<ReceiptDialog> {
             color: AppColors.textMuted,
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.rajdhani(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: isNegative ? AppColors.occupied : AppColors.textPrimary,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: GoogleFonts.rajdhani(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: isNegative ? AppColors.occupied : AppColors.textPrimary,
+            ),
           ),
         ),
       ],

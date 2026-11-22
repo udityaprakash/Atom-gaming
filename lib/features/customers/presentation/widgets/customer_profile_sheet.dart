@@ -6,8 +6,6 @@ import '../../../../core/services/security_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/time_formatter.dart';
-import '../../../../shared/widgets/glass_card.dart';
-import '../../../billing/presentation/widgets/receipt_dialog.dart';
 import '../../../sessions/providers/session_provider.dart';
 import '../../data/customer_repository.dart';
 import '../../providers/customer_provider.dart';

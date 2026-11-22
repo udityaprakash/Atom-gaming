@@ -10,6 +10,7 @@ part 'app_database.g.dart';
 @DriftDatabase(tables: [
   Rooms,
   Customers,
+  Games,
   Sessions,
   SessionSegments,
   SessionExtensions,
@@ -22,7 +23,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -33,6 +34,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.addColumn(sessions, sessions.controllerCount);
         await m.addColumn(sessionSegments, sessionSegments.controllerCount);
+      }
+      if (from < 3) {
+        await m.createTable(games);
+        await m.addColumn(sessions, sessions.gameId);
+        await m.addColumn(sessionSegments, sessionSegments.gameId);
       }
     },
   );

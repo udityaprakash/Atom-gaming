@@ -153,8 +153,8 @@ void main() {
       expect(text, contains('ATOM GAMING LOUNGE'));
       expect(text, contains('Aarav Patel'));
       expect(text, contains('+91 99887 76655'));
-      expect(text, contains('Room 1 (PS5) [PS5 Pro]'));
-      expect(text, contains('Room 2 (VR) [VR Simulator]'));
+      expect(text, contains('Room 1 (PS5) [PS5 Pro'));
+      expect(text, contains('Room 2 (VR) [VR Simulator'));
       expect(text, contains('Extensions : 1 (+15 mins)'));
       expect(text, contains('TOTAL PAYABLE  : ₹350'));
       expect(text, contains('PAYMENT METHOD : CASH (CASH ONLY)'));

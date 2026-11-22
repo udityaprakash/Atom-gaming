@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -167,6 +168,11 @@ class AlarmService {
     return entry != null && entry.value == 'true'; // Default false: timer pauses on finish
   }
 
+  Future<bool> isBillOnPauseEnabled() async {
+    final entry = await (_db.select(_db.appSettings)..where((t) => t.key.equals('bill_on_pause_enabled'))).getSingleOrNull();
+    return entry != null && entry.value == 'true'; // Default false: mid-session pause is free
+  }
+
   Future<void> setSoundEnabled(bool enabled) async {
     await _db.into(_db.appSettings).insertOnConflictUpdate(
           AppSettingsCompanion.insert(
@@ -191,6 +197,16 @@ class AlarmService {
     await _db.into(_db.appSettings).insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: 'auto_overtime_enabled',
+            value: enabled.toString(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+  }
+
+  Future<void> setBillOnPauseEnabled(bool enabled) async {
+    await _db.into(_db.appSettings).insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: 'bill_on_pause_enabled',
             value: enabled.toString(),
             updatedAt: DateTime.now(),
           ),
