@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/alarm_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../features/sessions/presentation/screens/alarm_trigger_screen.dart';
@@ -19,6 +21,34 @@ class AppScaffold extends ConsumerStatefulWidget {
 
 class _AppScaffoldState extends ConsumerState<AppScaffold> {
   final Set<String> _alarmedSessionIds = {};
+  StreamSubscription<String>? _alarmSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _alarmSubscription = ref.read(alarmServiceProvider).onAlarmTriggered.listen((sessionId) async {
+        if (!_alarmedSessionIds.contains(sessionId)) {
+          _alarmedSessionIds.add(sessionId);
+          final active = await ref.read(sessionRepositoryProvider).getActiveSessionById(sessionId);
+          if (active != null && mounted) {
+            rootNavigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) => AlarmTriggerScreen(activeSession: active),
+                fullscreenDialog: true,
+              ),
+            );
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _alarmSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +93,7 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
 
           // Push full-screen buzzing alarm screen
           if (mounted) {
-            Navigator.of(context, rootNavigator: true).push(
+            rootNavigatorKey.currentState?.push(
               MaterialPageRoute(
                 builder: (_) => AlarmTriggerScreen(activeSession: active),
                 fullscreenDialog: true,

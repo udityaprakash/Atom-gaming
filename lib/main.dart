@@ -1,3 +1,4 @@
+import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
@@ -10,6 +11,11 @@ import 'features/rooms/data/room_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Alarm.init();
+  } catch (e) {
+    debugPrint('Alarm.init notice: $e');
+  }
 
   final container = ProviderContainer();
   // Check and seed initial sample rooms from SRS Section 3.1 if empty

@@ -1,17 +1,27 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:alarm/alarm.dart';
+import 'package:alarm/model/volume_settings.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:vibration/vibration.dart';
+import 'package:uuid/uuid.dart';
+import '../constants/app_constants.dart';
 import '../database/app_database.dart';
 import '../database/database_provider.dart';
+import '../router/app_router.dart';
+import '../../features/sessions/data/session_repository.dart';
+import '../../features/sessions/presentation/screens/alarm_trigger_screen.dart';
 
 final alarmServiceProvider = Provider<AlarmService>((ref) {
   final db = ref.watch(appDatabaseProvider);
@@ -95,8 +105,12 @@ class AlarmService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   final AudioPlayer _audioPlayer = AudioPlayer();
 
+  final StreamController<String> _alarmTriggerStreamController = StreamController<String>.broadcast();
+  Stream<String> get onAlarmTriggered => _alarmTriggerStreamController.stream;
+
   bool _isInitialized = false;
   bool _isBuzzerActive = false;
+  String? _currentlyDisplayingSessionId;
 
   bool get isBuzzerActive => _isBuzzerActive;
 
@@ -110,6 +124,26 @@ class AlarmService {
     if (_isInitialized) return;
 
     try {
+      // 1. Initialize native Alarm plugin
+      try {
+        await Alarm.init();
+
+        // Listen to native Alarm ringing stream
+        Alarm.ringing.listen((alarmSet) async {
+          for (final alarmSettings in alarmSet.alarms) {
+            debugPrint('Native Alarm ringing for ID: ${alarmSettings.id}, payload: ${alarmSettings.payload}');
+            final sessionId = alarmSettings.payload;
+            if (sessionId != null && sessionId.isNotEmpty) {
+              _alarmTriggerStreamController.add(sessionId);
+              await _handleSessionAlarmTrigger(sessionId);
+            }
+          }
+        });
+      } catch (alarmErr) {
+        debugPrint('Alarm.init notice (unit test or mock mode): $alarmErr');
+      }
+
+      // 2. Initialize local notifications
       tz.initializeTimeZones();
 
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -119,6 +153,10 @@ class AlarmService {
         settings: initSettings,
         onDidReceiveNotificationResponse: (response) {
           debugPrint('Notification clicked with payload: ${response.payload}');
+          if (response.payload != null && response.payload!.isNotEmpty) {
+            _alarmTriggerStreamController.add(response.payload!);
+            _tryShowAlarmScreen(response.payload!);
+          }
         },
       );
 
@@ -149,6 +187,65 @@ class AlarmService {
       _isInitialized = true;
     } catch (e) {
       debugPrint('AlarmService initialization error: $e');
+    }
+  }
+
+  // --- Session Alarm Handler on Trigger ---
+  Future<void> _handleSessionAlarmTrigger(String sessionId) async {
+    try {
+      // 1. If auto overtime is disabled, auto-pause session so timer doesn't accrue without consent
+      final autoOvertime = await isAutoOvertimeEnabled();
+      if (!autoOvertime) {
+        final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
+        if (session != null && session.status == AppConstants.sessionActive) {
+          await (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId))).write(
+            const SessionsCompanion(
+              status: Value(AppConstants.sessionPaused),
+            ),
+          );
+          await _db.into(_db.sessionEvents).insert(
+            SessionEventsCompanion.insert(
+              id: const Uuid().v4(),
+              sessionId: sessionId,
+              eventType: 'paused',
+              eventTimestamp: DateTime.now(),
+              notes: const Value('Auto-paused on timer expiration without Freeplay'),
+            ),
+          );
+        }
+      }
+
+      // 2. Open alarm screen over keyguard/lockscreen if context available
+      await _tryShowAlarmScreen(sessionId);
+    } catch (e) {
+      debugPrint('Error handling session alarm trigger: $e');
+    }
+  }
+
+  Future<void> _tryShowAlarmScreen(String sessionId) async {
+    if (_currentlyDisplayingSessionId == sessionId) return;
+
+    try {
+      final repo = SessionRepository(_db);
+      final active = await repo.getActiveSessionById(sessionId);
+      if (active == null) return;
+
+      final navState = rootNavigatorKey.currentState;
+      if (navState != null && navState.mounted) {
+        _currentlyDisplayingSessionId = sessionId;
+        navState.push(
+          MaterialPageRoute(
+            builder: (_) => AlarmTriggerScreen(activeSession: active),
+            fullscreenDialog: true,
+          ),
+        ).then((_) {
+          if (_currentlyDisplayingSessionId == sessionId) {
+            _currentlyDisplayingSessionId = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error showing alarm screen: $e');
     }
   }
 
@@ -213,7 +310,7 @@ class AlarmService {
         );
   }
 
-  // --- Morning Alarm Style Continuous Buzzer ---
+  // --- Continuous Buzzer Fallback ---
   Future<void> startContinuousBuzzer() async {
     if (_isBuzzerActive) return;
     _isBuzzerActive = true;
@@ -239,7 +336,6 @@ class AlarmService {
       try {
         final hasVib = await Vibration.hasVibrator();
         if (hasVib == true) {
-          // repeat: 0 loops the pattern until cancelled
           await Vibration.vibrate(
             pattern: [0, 500, 250, 500, 250, 700, 300],
             repeat: 0,
@@ -286,7 +382,42 @@ class AlarmService {
     }
   }
 
-  // --- Scheduled Notifications ---
+  Future<void> testNativeAlarm() async {
+    try {
+      final soundOn = await isSoundEnabled();
+      final vibrationOn = await isVibrationEnabled();
+
+      final alarmSettings = AlarmSettings(
+        id: 999999,
+        dateTime: DateTime.now().add(const Duration(seconds: 1)),
+        assetAudioPath: 'assets/audio/alarm.mp3',
+        loopAudio: true,
+        vibrate: vibrationOn,
+        warningNotificationOnKill: false,
+        androidFullScreenIntent: true,
+        volumeSettings: VolumeSettings.fixed(
+          volume: soundOn ? 1.0 : 0.0,
+          volumeEnforced: true,
+        ),
+        notificationSettings: const NotificationSettings(
+          title: "ATOM ALARM TEST",
+          body: 'Native alarm and full screen intent test is ringing!',
+          stopButton: 'Stop',
+        ),
+        payload: 'test_alert_preview',
+      );
+
+      await Alarm.set(alarmSettings: alarmSettings);
+    } catch (e) {
+      debugPrint('Error triggering test native alarm: $e');
+    }
+  }
+
+  // --- Scheduled Native Alarms ---
+  int _sessionIdToAlarmId(String sessionId) {
+    return (sessionId.hashCode.abs() % 2000000000) + 1;
+  }
+
   int _sessionIdToNotificationId(String sessionId) {
     return sessionId.hashCode.abs() % 100000;
   }
@@ -296,8 +427,45 @@ class AlarmService {
     required String roomName,
     required DateTime scheduledEndAt,
   }) async {
+    final now = DateTime.now();
+    final soundOn = await isSoundEnabled();
+    final vibrationOn = await isVibrationEnabled();
+    final alarmId = _sessionIdToAlarmId(sessionId);
+
+    // 1. Set Native Alarm via alarm plugin (wakes device, triggers fullScreenIntent)
     try {
-      final now = DateTime.now();
+      final alarmTime = scheduledEndAt.isBefore(now)
+          ? now.add(const Duration(seconds: 1))
+          : scheduledEndAt;
+
+      final alarmSettings = AlarmSettings(
+        id: alarmId,
+        dateTime: alarmTime,
+        assetAudioPath: 'assets/audio/alarm.mp3',
+        loopAudio: true,
+        vibrate: vibrationOn,
+        warningNotificationOnKill: false,
+        androidFullScreenIntent: true,
+        volumeSettings: VolumeSettings.fixed(
+          volume: soundOn ? 1.0 : 0.0,
+          volumeEnforced: true,
+        ),
+        notificationSettings: NotificationSettings(
+          title: "TIME'S UP: $roomName",
+          body: 'Gaming session duration has completed for $roomName!',
+          stopButton: 'Stop',
+        ),
+        payload: sessionId,
+      );
+
+      await Alarm.set(alarmSettings: alarmSettings);
+      debugPrint('Native Alarm set for session $sessionId at $alarmTime (Alarm ID: $alarmId)');
+    } catch (e) {
+      debugPrint('Error scheduling native alarm: $e');
+    }
+
+    // 2. Set backup local notification
+    try {
       if (scheduledEndAt.isBefore(now)) {
         await showImmediateAlert(
           sessionId: sessionId,
@@ -308,7 +476,7 @@ class AlarmService {
         return;
       }
 
-      final id = _sessionIdToNotificationId(sessionId);
+      final notifId = _sessionIdToNotificationId(sessionId);
       final tzScheduledTime = tz.TZDateTime.from(scheduledEndAt, tz.local);
 
       final androidDetails = AndroidNotificationDetails(
@@ -328,7 +496,7 @@ class AlarmService {
       );
 
       await _notificationsPlugin.zonedSchedule(
-        id: id,
+        id: notifId,
         title: "TIME'S UP: $roomName",
         body: 'Gaming session duration has completed for $roomName!',
         scheduledDate: tzScheduledTime,
@@ -337,7 +505,7 @@ class AlarmService {
         payload: sessionId,
       );
     } catch (e) {
-      debugPrint('Error scheduling session alert: $e');
+      debugPrint('Error scheduling backup notification: $e');
     }
   }
 
@@ -347,8 +515,40 @@ class AlarmService {
     required String title,
     required String body,
   }) async {
+    final soundOn = await isSoundEnabled();
+    final vibrationOn = await isVibrationEnabled();
+    final alarmId = _sessionIdToAlarmId(sessionId);
+
+    // 1. Trigger native alarm immediately (1s delay so AlarmManager executes instantly)
     try {
-      final id = _sessionIdToNotificationId(sessionId);
+      final alarmSettings = AlarmSettings(
+        id: alarmId,
+        dateTime: DateTime.now().add(const Duration(seconds: 1)),
+        assetAudioPath: 'assets/audio/alarm.mp3',
+        loopAudio: true,
+        vibrate: vibrationOn,
+        warningNotificationOnKill: false,
+        androidFullScreenIntent: true,
+        volumeSettings: VolumeSettings.fixed(
+          volume: soundOn ? 1.0 : 0.0,
+          volumeEnforced: true,
+        ),
+        notificationSettings: NotificationSettings(
+          title: title,
+          body: body,
+          stopButton: 'Stop',
+        ),
+        payload: sessionId,
+      );
+
+      await Alarm.set(alarmSettings: alarmSettings);
+    } catch (e) {
+      debugPrint('Error triggering immediate native alarm: $e');
+    }
+
+    // 2. Immediate local notification fallback
+    try {
+      final notifId = _sessionIdToNotificationId(sessionId);
       final androidDetails = AndroidNotificationDetails(
         channelId,
         channelName,
@@ -362,23 +562,48 @@ class AlarmService {
       );
 
       await _notificationsPlugin.show(
-        id: id,
+        id: notifId,
         title: title,
         body: body,
         notificationDetails: NotificationDetails(android: androidDetails),
         payload: sessionId,
       );
     } catch (e) {
-      debugPrint('Error showing immediate alert: $e');
+      debugPrint('Error showing immediate notification: $e');
     }
   }
 
   Future<void> cancelSessionAlert(String sessionId) async {
     try {
-      final id = _sessionIdToNotificationId(sessionId);
-      await _notificationsPlugin.cancel(id: id);
+      final alarmId = _sessionIdToAlarmId(sessionId);
+      await Alarm.stop(alarmId);
     } catch (e) {
-      debugPrint('Error cancelling session alert: $e');
+      debugPrint('Error stopping native alarm on cancel: $e');
     }
+
+    try {
+      final notifId = _sessionIdToNotificationId(sessionId);
+      await _notificationsPlugin.cancel(id: notifId);
+    } catch (e) {
+      debugPrint('Error cancelling notification: $e');
+    }
+  }
+
+  Future<void> stopActiveAlarm([String? sessionId]) async {
+    try {
+      if (sessionId != null) {
+        final alarmId = _sessionIdToAlarmId(sessionId);
+        await Alarm.stop(alarmId);
+        final notifId = _sessionIdToNotificationId(sessionId);
+        await _notificationsPlugin.cancel(id: notifId);
+      } else {
+        await Alarm.stopAll();
+        await _notificationsPlugin.cancelAll();
+      }
+    } catch (e) {
+      debugPrint('Error stopping active alarm: $e');
+    }
+
+    await stopContinuousBuzzer();
   }
 }

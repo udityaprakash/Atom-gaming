@@ -12,35 +12,35 @@ import '../../features/settings/presentation/business_profile_screen.dart';
 import '../../features/settings/presentation/data_management_screen.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/',
   routes: [
     GoRoute(
       path: '/customers',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const CustomersScreen(),
     ),
     GoRoute(
       path: '/games',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const GamesScreen(),
     ),
     GoRoute(
       path: '/reservations',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const ReservationsScreen(),
     ),
     GoRoute(
       path: '/backup',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const DataManagementScreen(),
     ),
     GoRoute(
       path: '/business-profile',
-      parentNavigatorKey: _rootNavigatorKey,
+      parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const BusinessProfileScreen(),
     ),
     StatefulShellRoute.indexedStack(

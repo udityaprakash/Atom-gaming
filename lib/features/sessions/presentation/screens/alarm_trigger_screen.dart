@@ -46,18 +46,18 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
   @override
   void dispose() {
     _animController.dispose();
-    // Stop buzzing whenever this screen is exited
-    ref.read(alarmServiceProvider).stopContinuousBuzzer();
+    // Stop native alarm and continuous buzzing whenever this screen is exited
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     super.dispose();
   }
 
   void _stopAndDismiss() {
-    ref.read(alarmServiceProvider).stopContinuousBuzzer();
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     Navigator.of(context, rootNavigator: true).pop();
   }
 
   Future<void> _handleFreeStyle() async {
-    ref.read(alarmServiceProvider).stopContinuousBuzzer();
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     final repo = ref.read(sessionRepositoryProvider);
     // Enable Freeplay so overtime billing starts, and resume session if paused
     await repo.enableFreeplay(widget.activeSession.session.id);
@@ -77,7 +77,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
   }
 
   void _handleExtend() {
-    ref.read(alarmServiceProvider).stopContinuousBuzzer();
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     Navigator.of(context, rootNavigator: true).pop();
 
     showModalBottomSheet(
@@ -89,7 +89,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
   }
 
   void _handleEndSession() {
-    ref.read(alarmServiceProvider).stopContinuousBuzzer();
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     Navigator.of(context, rootNavigator: true).pop();
 
     showDialog(
@@ -109,7 +109,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
       canPop: true,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
-          ref.read(alarmServiceProvider).stopContinuousBuzzer();
+          ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
         }
       },
       child: Scaffold(

@@ -200,7 +200,7 @@ void main() {
 
     test('CSV exports generate valid RFC-style headers', () async {
       final sessionsCsv = await DataExportService.exportSessionsToCsv(db);
-      expect(sessionsCsv.startsWith('Session ID,Customer Name'), isTrue);
+      expect(sessionsCsv.startsWith('Session ID,Customer ID,Customer Name'), isTrue);
 
       final paymentsCsv = await DataExportService.exportPaymentsToCsv(db);
       expect(paymentsCsv.startsWith('Payment ID,Session ID'), isTrue);
@@ -210,3 +210,4 @@ void main() {
     });
   });
 }
+

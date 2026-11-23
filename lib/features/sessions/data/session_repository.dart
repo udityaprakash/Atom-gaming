@@ -179,6 +179,60 @@ class SessionRepository {
     });
   }
 
+  Future<ActiveRoomSession?> getActiveSessionById(String sessionId) async {
+    final query = _db.select(_db.sessions).join([
+      innerJoin(
+        _db.sessionSegments,
+        _db.sessionSegments.sessionId.equalsExp(_db.sessions.id) &
+            _db.sessionSegments.endedAt.isNull(),
+      ),
+      innerJoin(
+        _db.rooms,
+        _db.rooms.id.equalsExp(_db.sessionSegments.roomId),
+      ),
+      leftOuterJoin(
+        _db.customers,
+        _db.customers.id.equalsExp(_db.sessions.customerId),
+      ),
+      leftOuterJoin(
+        _db.games,
+        _db.games.id.equalsExp(_db.sessionSegments.gameId),
+      ),
+    ])..where(_db.sessions.id.equals(sessionId));
+
+    final row = await query.getSingleOrNull();
+    if (row == null) return null;
+
+    final session = row.readTable(_db.sessions);
+    DateTime? lastPauseTime;
+    bool isFreeplay = false;
+
+    if (session.status == AppConstants.sessionPaused) {
+      final lastPause = await (_db.select(_db.sessionEvents)
+            ..where((t) => t.sessionId.equals(session.id) & t.eventType.equals('paused'))
+            ..orderBy([(t) => OrderingTerm(expression: t.eventTimestamp, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
+      lastPauseTime = lastPause?.eventTimestamp;
+    }
+
+    final fpEvent = await (_db.select(_db.sessionEvents)
+          ..where((t) => t.sessionId.equals(session.id) & t.eventType.equals('freeplay_enabled'))
+          ..limit(1))
+        .getSingleOrNull();
+    isFreeplay = fpEvent != null;
+
+    return ActiveRoomSession(
+      session: session,
+      segment: row.readTable(_db.sessionSegments),
+      room: row.readTable(_db.rooms),
+      customer: row.readTableOrNull(_db.customers),
+      game: row.readTableOrNull(_db.games),
+      lastPauseTime: lastPauseTime,
+      isFreeplay: isFreeplay,
+    );
+  }
+
   Future<String> startSession({
     required String roomId,
     required int durationMinutes,

@@ -220,6 +220,33 @@ class _NotificationSettingsScreenState
               onPressed: _triggerTestAlarmScreen,
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: NeonButton(
+              label: 'TEST NATIVE ALARM (LOCK SCREEN TEST)',
+              icon: Icons.alarm,
+              color: AppColors.accent,
+              isOutlined: true,
+              height: 44,
+              fontSize: 13,
+              onPressed: () async {
+                await alarmService.testNativeAlarm();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Native alarm ringing in 1 second! Lock screen or background app now.',
+                        style: GoogleFonts.rajdhani(fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      backgroundColor: AppColors.surfaceElevated,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
           const SizedBox(height: 24),
 
           Container(
