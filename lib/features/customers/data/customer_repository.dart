@@ -126,7 +126,11 @@ class CustomerRepository {
         room = await (_db.select(_db.rooms)..where((t) => t.id.equals(segment.roomId))).getSingleOrNull();
       }
 
-      final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(s.id))).getSingleOrNull();
+      final payment = await (_db.select(_db.payments)
+            ..where((t) => t.sessionId.equals(s.id))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
 
       list.add(CustomerSessionSummary(
         session: s,

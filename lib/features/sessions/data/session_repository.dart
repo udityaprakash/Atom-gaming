@@ -965,6 +965,11 @@ class SessionRepository {
       final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
       if (session == null) throw Exception('Session not found: $sessionId');
 
+      // Idempotency Guard: If session is already completed, exit cleanly to prevent duplicate payments
+      if (session.status == AppConstants.sessionCompleted) {
+        return;
+      }
+
       // 2. Fetch Customer
       final customer = session.customerId != null
           ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
@@ -1143,7 +1148,11 @@ class SessionRepository {
         throw Exception('Session $sessionId is already marked as PAID');
       }
 
-      final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+      final payment = await (_db.select(_db.payments)
+            ..where((t) => t.sessionId.equals(sessionId))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+            ..limit(1))
+          .getSingleOrNull();
       final collected = amountCollected ?? session.totalAmount;
 
       // Update Session payment status to PAID
@@ -1203,7 +1212,11 @@ class SessionRepository {
         ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
         : null;
 
-    final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+    final payment = await (_db.select(_db.payments)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+          ..limit(1))
+        .getSingleOrNull();
 
     final segments = await (_db.select(_db.sessionSegments)
           ..where((t) => t.sessionId.equals(sessionId))
@@ -1294,7 +1307,11 @@ class SessionRepository {
           game = await (_db.select(_db.games)..where((t) => t.id.equals(session.gameId!))).getSingleOrNull();
         }
 
-        final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(session.id))).getSingleOrNull();
+        final payment = await (_db.select(_db.payments)
+              ..where((t) => t.sessionId.equals(session.id))
+              ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+              ..limit(1))
+            .getSingleOrNull();
 
         if (room != null) {
           list.add(
@@ -1435,7 +1452,11 @@ class SessionRepository {
         }
 
         // Fetch payment
-        final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(session.id))).getSingleOrNull();
+        final payment = await (_db.select(_db.payments)
+              ..where((t) => t.sessionId.equals(session.id))
+              ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+              ..limit(1))
+            .getSingleOrNull();
 
         // Fetch extensions count
         final extensions = await (_db.select(_db.sessionExtensions)..where((t) => t.sessionId.equals(session.id))).get();
@@ -1473,7 +1494,11 @@ class SessionRepository {
       }
     }
 
-    final payment = await (_db.select(_db.payments)..where((t) => t.sessionId.equals(sessionId))).getSingleOrNull();
+    final payment = await (_db.select(_db.payments)
+          ..where((t) => t.sessionId.equals(sessionId))
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
+          ..limit(1))
+        .getSingleOrNull();
     final extensions = await getSessionExtensions(sessionId);
     final events = await getSessionEvents(sessionId);
 

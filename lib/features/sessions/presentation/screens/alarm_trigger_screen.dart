@@ -13,8 +13,13 @@ import '../widgets/extend_session_sheet.dart';
 
 class AlarmTriggerScreen extends ConsumerStatefulWidget {
   final ActiveRoomSession activeSession;
+  final int pendingQueueCount;
 
-  const AlarmTriggerScreen({super.key, required this.activeSession});
+  const AlarmTriggerScreen({
+    super.key,
+    required this.activeSession,
+    this.pendingQueueCount = 0,
+  });
 
   @override
   ConsumerState<AlarmTriggerScreen> createState() => _AlarmTriggerScreenState();
@@ -121,29 +126,61 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Top Indicator
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.occupied.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.occupied.withValues(alpha: 0.6)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.alarm_on, color: AppColors.occupied, size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'SESSION EXPIRED ALERT',
-                        style: GoogleFonts.orbitron(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.occupied,
-                          letterSpacing: 1.2,
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.occupied.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.occupied.withValues(alpha: 0.6)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.alarm_on, color: AppColors.occupied, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'SESSION EXPIRED ALERT',
+                            style: GoogleFonts.orbitron(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.occupied,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.pendingQueueCount > 0) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.endingSoon.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.endingSoon.withValues(alpha: 0.8)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.queue, color: AppColors.endingSoon, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${widget.pendingQueueCount} MORE ROOM(S) EXPIRED',
+                              style: GoogleFonts.rajdhani(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.endingSoon,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
 
                 // Pulsing Center Alarm Unit

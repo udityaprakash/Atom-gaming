@@ -110,6 +110,7 @@ class AlarmService {
 
   bool _isInitialized = false;
   bool _isBuzzerActive = false;
+  bool _isAlarmScreenActive = false;
   String? _currentlyDisplayingSessionId;
 
   bool get isBuzzerActive => _isBuzzerActive;
@@ -222,30 +223,81 @@ class AlarmService {
     }
   }
 
-  Future<void> _tryShowAlarmScreen(String sessionId) async {
-    if (_currentlyDisplayingSessionId == sessionId) return;
+  final List<String> _pendingAlarmQueue = <String>[];
 
+  List<String> get pendingAlarmQueue => List.unmodifiable(_pendingAlarmQueue);
+  int get pendingAlarmCount => _pendingAlarmQueue.length;
+
+  Future<void> _tryShowAlarmScreen(String sessionId) async {
+    // If this session is already showing or already waiting in the queue, avoid duplicate entries
+    if (_currentlyDisplayingSessionId == sessionId || _pendingAlarmQueue.contains(sessionId)) {
+      return;
+    }
+
+    // If an alarm screen is already open on screen, queue this session so it shows immediately when the current one is handled
+    if (_isAlarmScreenActive) {
+      _pendingAlarmQueue.add(sessionId);
+      debugPrint('Queued alarm screen for session $sessionId. Pending queue size: ${_pendingAlarmQueue.length}');
+      return;
+    }
+
+    await _presentAlarmScreen(sessionId);
+  }
+
+  Future<void> _presentAlarmScreen(String sessionId) async {
     try {
       final repo = SessionRepository(_db);
       final active = await repo.getActiveSessionById(sessionId);
-      if (active == null) return;
+      if (active == null || active.session.status == AppConstants.sessionCompleted) {
+        _checkAndShowNextPendingAlarm();
+        return;
+      }
 
       final navState = rootNavigatorKey.currentState;
       if (navState != null && navState.mounted) {
+        _isAlarmScreenActive = true;
         _currentlyDisplayingSessionId = sessionId;
+
         navState.push(
           MaterialPageRoute(
-            builder: (_) => AlarmTriggerScreen(activeSession: active),
+            builder: (_) => AlarmTriggerScreen(
+              activeSession: active,
+              pendingQueueCount: _pendingAlarmQueue.length,
+            ),
             fullscreenDialog: true,
           ),
         ).then((_) {
+          _isAlarmScreenActive = false;
           if (_currentlyDisplayingSessionId == sessionId) {
             _currentlyDisplayingSessionId = null;
           }
+          // When current alarm screen is resolved/dismissed, present the next pending expired room
+          _checkAndShowNextPendingAlarm();
         });
+      } else {
+        if (!_pendingAlarmQueue.contains(sessionId)) {
+          _pendingAlarmQueue.add(sessionId);
+        }
       }
     } catch (e) {
+      _isAlarmScreenActive = false;
+      if (_currentlyDisplayingSessionId == sessionId) {
+        _currentlyDisplayingSessionId = null;
+      }
       debugPrint('Error showing alarm screen: $e');
+      _checkAndShowNextPendingAlarm();
+    }
+  }
+
+  void _checkAndShowNextPendingAlarm() {
+    if (_isAlarmScreenActive) return;
+
+    while (_pendingAlarmQueue.isNotEmpty) {
+      final nextSessionId = _pendingAlarmQueue.removeAt(0);
+      if (nextSessionId != _currentlyDisplayingSessionId) {
+        _presentAlarmScreen(nextSessionId);
+        break;
+      }
     }
   }
 
@@ -590,6 +642,16 @@ class AlarmService {
   }
 
   Future<void> stopActiveAlarm([String? sessionId]) async {
+    _isAlarmScreenActive = false;
+    if (sessionId != null) {
+      if (_currentlyDisplayingSessionId == sessionId) {
+        _currentlyDisplayingSessionId = null;
+      }
+      _pendingAlarmQueue.remove(sessionId);
+    } else {
+      _currentlyDisplayingSessionId = null;
+      _pendingAlarmQueue.clear();
+    }
     try {
       if (sessionId != null) {
         final alarmId = _sessionIdToAlarmId(sessionId);
