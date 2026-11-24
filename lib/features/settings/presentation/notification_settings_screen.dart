@@ -4,8 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/services/alarm_service.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/neon_button.dart';
+import '../../dashboard/presentation/widgets/alarm_permission_dialog.dart';
 import '../../sessions/data/session_repository.dart';
 import '../../sessions/presentation/screens/alarm_trigger_screen.dart';
 
@@ -24,6 +26,7 @@ class _NotificationSettingsScreenState
   bool _autoOvertimeEnabled = false;
   bool _billOnPauseEnabled = false;
   bool _isLoading = true;
+  AlarmPermissionStatus? _permissionStatus;
 
   @override
   void initState() {
@@ -33,10 +36,13 @@ class _NotificationSettingsScreenState
 
   Future<void> _loadSettings() async {
     final alarmService = ref.read(alarmServiceProvider);
+    final permissionService = ref.read(permissionServiceProvider);
+
     final sound = await alarmService.isSoundEnabled();
     final vibration = await alarmService.isVibrationEnabled();
     final autoOvertime = await alarmService.isAutoOvertimeEnabled();
     final billOnPause = await alarmService.isBillOnPauseEnabled();
+    final permStatus = await permissionService.checkAllPermissions();
 
     if (mounted) {
       setState(() {
@@ -44,6 +50,7 @@ class _NotificationSettingsScreenState
         _vibrationEnabled = vibration;
         _autoOvertimeEnabled = autoOvertime;
         _billOnPauseEnabled = billOnPause;
+        _permissionStatus = permStatus;
         _isLoading = false;
       });
     }
@@ -127,6 +134,99 @@ class _NotificationSettingsScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _buildSectionHeader('SYSTEM PERMISSIONS & LOCK SCREEN STATUS'),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (_permissionStatus?.allCriticalGranted ?? false)
+                    ? AppColors.available.withValues(alpha: 0.5)
+                    : AppColors.occupied.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      (_permissionStatus?.allCriticalGranted ?? false)
+                          ? Icons.check_circle_outline
+                          : Icons.warning_amber_rounded,
+                      color: (_permissionStatus?.allCriticalGranted ?? false)
+                          ? AppColors.available
+                          : AppColors.occupied,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (_permissionStatus?.allCriticalGranted ?? false)
+                            ? 'All Lock-Screen & Background Permissions Active'
+                            : 'Background / Lock Screen Permissions Incomplete',
+                        style: GoogleFonts.rajdhani(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: (_permissionStatus?.allCriticalGranted ?? false)
+                              ? AppColors.available
+                              : AppColors.occupied,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _buildStatusPill(
+                      label: 'Exact Alarms',
+                      isOk: _permissionStatus?.exactAlarmsGranted ?? false,
+                    ),
+                    _buildStatusPill(
+                      label: 'Battery Unrestricted',
+                      isOk: _permissionStatus?.batteryOptimizationIgnored ?? false,
+                    ),
+                    _buildStatusPill(
+                      label: 'Notifications',
+                      isOk: _permissionStatus?.notificationsGranted ?? false,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.settings_suggest_outlined, size: 18),
+                    label: Text(
+                      'CONFIGURE LOCK-SCREEN PERMISSIONS',
+                      style: GoogleFonts.orbitron(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    onPressed: () async {
+                      await AlarmPermissionDialog.show(context);
+                      await _loadSettings();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           _buildSectionHeader('ALARM CHANNELS & HARDWARE'),
           _buildSwitchTile(
             title: 'Sound Alarm (Buzzer)',
@@ -285,6 +385,33 @@ class _NotificationSettingsScreenState
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill({required String label, required bool isOk}) {
+    final color = isOk ? AppColors.available : AppColors.occupied;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(isOk ? Icons.check : Icons.close, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.rajdhani(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
         ],

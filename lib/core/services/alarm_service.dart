@@ -12,8 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:vibration/vibration.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
@@ -145,20 +143,11 @@ class AlarmService {
       }
 
       // 2. Initialize local notifications
-      tz.initializeTimeZones();
-
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const initSettings = InitializationSettings(android: androidSettings);
 
       await _notificationsPlugin.initialize(
         settings: initSettings,
-        onDidReceiveNotificationResponse: (response) {
-          debugPrint('Notification clicked with payload: ${response.payload}');
-          if (response.payload != null && response.payload!.isNotEmpty) {
-            _alarmTriggerStreamController.add(response.payload!);
-            _tryShowAlarmScreen(response.payload!);
-          }
-        },
       );
 
       final androidPlatform = _notificationsPlugin
@@ -176,10 +165,6 @@ class AlarmService {
           vibrationPattern: Int64List.fromList([0, 800, 400, 800, 400, 1000]),
         );
         await androidPlatform.createNotificationChannel(alarmChannel);
-
-        // Request permissions for Android 13+ & Android 14+
-        await androidPlatform.requestNotificationsPermission();
-        await androidPlatform.requestExactAlarmsPermission();
       }
 
       // Pre-generate alarm sound file in background
@@ -470,10 +455,6 @@ class AlarmService {
     return (sessionId.hashCode.abs() % 2000000000) + 1;
   }
 
-  int _sessionIdToNotificationId(String sessionId) {
-    return sessionId.hashCode.abs() % 100000;
-  }
-
   Future<void> scheduleSessionAlert({
     required String sessionId,
     required String roomName,
@@ -484,7 +465,7 @@ class AlarmService {
     final vibrationOn = await isVibrationEnabled();
     final alarmId = _sessionIdToAlarmId(sessionId);
 
-    // 1. Set Native Alarm via alarm plugin (wakes device, triggers fullScreenIntent)
+    // Single source of truth: Set Native Alarm via alarm plugin (wakes device, triggers fullScreenIntent)
     try {
       final alarmTime = scheduledEndAt.isBefore(now)
           ? now.add(const Duration(seconds: 1))
@@ -515,50 +496,6 @@ class AlarmService {
     } catch (e) {
       debugPrint('Error scheduling native alarm: $e');
     }
-
-    // 2. Set backup local notification
-    try {
-      if (scheduledEndAt.isBefore(now)) {
-        await showImmediateAlert(
-          sessionId: sessionId,
-          roomName: roomName,
-          title: "TIME'S UP: $roomName",
-          body: 'Gaming session duration has finished!',
-        );
-        return;
-      }
-
-      final notifId = _sessionIdToNotificationId(sessionId);
-      final tzScheduledTime = tz.TZDateTime.from(scheduledEndAt, tz.local);
-
-      final androidDetails = AndroidNotificationDetails(
-        channelId,
-        channelName,
-        channelDescription: channelDescription,
-        importance: Importance.max,
-        priority: Priority.high,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 800, 400, 800, 400, 1000]),
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-        actions: const [
-          AndroidNotificationAction('extend', 'Extend'),
-          AndroidNotificationAction('end', 'End Session'),
-        ],
-      );
-
-      await _notificationsPlugin.zonedSchedule(
-        id: notifId,
-        title: "TIME'S UP: $roomName",
-        body: 'Gaming session duration has completed for $roomName!',
-        scheduledDate: tzScheduledTime,
-        notificationDetails: NotificationDetails(android: androidDetails),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: sessionId,
-      );
-    } catch (e) {
-      debugPrint('Error scheduling backup notification: $e');
-    }
   }
 
   Future<void> showImmediateAlert({
@@ -571,7 +508,7 @@ class AlarmService {
     final vibrationOn = await isVibrationEnabled();
     final alarmId = _sessionIdToAlarmId(sessionId);
 
-    // 1. Trigger native alarm immediately (1s delay so AlarmManager executes instantly)
+    // Single source of truth: Trigger native alarm immediately
     try {
       final alarmSettings = AlarmSettings(
         id: alarmId,
@@ -597,32 +534,6 @@ class AlarmService {
     } catch (e) {
       debugPrint('Error triggering immediate native alarm: $e');
     }
-
-    // 2. Immediate local notification fallback
-    try {
-      final notifId = _sessionIdToNotificationId(sessionId);
-      final androidDetails = AndroidNotificationDetails(
-        channelId,
-        channelName,
-        channelDescription: channelDescription,
-        importance: Importance.max,
-        priority: Priority.high,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList([0, 600, 300, 600, 300, 800]),
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.alarm,
-      );
-
-      await _notificationsPlugin.show(
-        id: notifId,
-        title: title,
-        body: body,
-        notificationDetails: NotificationDetails(android: androidDetails),
-        payload: sessionId,
-      );
-    } catch (e) {
-      debugPrint('Error showing immediate notification: $e');
-    }
   }
 
   Future<void> cancelSessionAlert(String sessionId) async {
@@ -631,13 +542,6 @@ class AlarmService {
       await Alarm.stop(alarmId);
     } catch (e) {
       debugPrint('Error stopping native alarm on cancel: $e');
-    }
-
-    try {
-      final notifId = _sessionIdToNotificationId(sessionId);
-      await _notificationsPlugin.cancel(id: notifId);
-    } catch (e) {
-      debugPrint('Error cancelling notification: $e');
     }
   }
 
@@ -656,11 +560,8 @@ class AlarmService {
       if (sessionId != null) {
         final alarmId = _sessionIdToAlarmId(sessionId);
         await Alarm.stop(alarmId);
-        final notifId = _sessionIdToNotificationId(sessionId);
-        await _notificationsPlugin.cancel(id: notifId);
       } else {
         await Alarm.stopAll();
-        await _notificationsPlugin.cancelAll();
       }
     } catch (e) {
       debugPrint('Error stopping active alarm: $e');

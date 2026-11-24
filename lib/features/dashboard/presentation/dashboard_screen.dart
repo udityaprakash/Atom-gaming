@@ -2,18 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../rooms/presentation/widgets/add_edit_room_dialog.dart';
 import '../../rooms/providers/room_provider.dart';
+import 'widgets/alarm_permission_banner.dart';
+import 'widgets/alarm_permission_dialog.dart';
 import 'widgets/dashboard_header.dart';
 import 'widgets/room_card.dart';
 import 'widgets/room_filter_bar.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkFirstRunPermissions();
+    });
+  }
+
+  Future<void> _checkFirstRunPermissions() async {
+    final service = ref.read(permissionServiceProvider);
+    final completed = await service.hasCompletedOnboarding();
+    final status = await service.checkAllPermissions();
+
+    if (!completed && !status.allCriticalGranted && mounted) {
+      await AlarmPermissionDialog.show(context, isDismissible: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final filteredRoomsAsync = ref.watch(filteredRoomsProvider);
 
     return Scaffold(
@@ -75,6 +101,11 @@ class DashboardScreen extends ConsumerWidget {
         },
         child: CustomScrollView(
           slivers: [
+            // Permission Warning Banner (if alarms / battery saver not configured)
+            const SliverToBoxAdapter(
+              child: AlarmPermissionBanner(),
+            ),
+
             // Top Overview Stats
             const SliverToBoxAdapter(
               child: Padding(
