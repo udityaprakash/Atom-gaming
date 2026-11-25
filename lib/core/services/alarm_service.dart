@@ -1,17 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
-import 'dart:typed_data';
 import 'package:alarm/alarm.dart';
 import 'package:alarm/model/volume_settings.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:vibration/vibration.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
@@ -28,76 +23,6 @@ final alarmServiceProvider = Provider<AlarmService>((ref) {
   return service;
 });
 
-class AlarmSoundGenerator {
-  static Future<File> getAlarmSoundFile() async {
-    final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/atom_alarm_tone.wav');
-    if (await file.exists() && await file.length() > 1000) {
-      return file;
-    }
-
-    const sampleRate = 22050;
-    const durationSeconds = 1.6;
-    final totalSamples = (sampleRate * durationSeconds).toInt();
-    final dataSize = totalSamples * 2; // 16-bit PCM = 2 bytes per sample
-
-    final bytes = BytesBuilder();
-
-    // 1. RIFF Header
-    bytes.add(ascii.encode('RIFF'));
-    final fileSize = 36 + dataSize;
-    bytes.add(_int32ToBytes(fileSize));
-    bytes.add(ascii.encode('WAVE'));
-
-    // 2. fmt chunk
-    bytes.add(ascii.encode('fmt '));
-    bytes.add(_int32ToBytes(16)); // Chunk size 16 for PCM
-    bytes.add(_int16ToBytes(1));  // AudioFormat 1 = PCM
-    bytes.add(_int16ToBytes(1));  // Channels = 1 (Mono)
-    bytes.add(_int32ToBytes(sampleRate)); // Sample rate
-    bytes.add(_int32ToBytes(sampleRate * 2)); // Byte rate
-    bytes.add(_int16ToBytes(2));  // Block align
-    bytes.add(_int16ToBytes(16)); // Bits per sample
-
-    // 3. data chunk
-    bytes.add(ascii.encode('data'));
-    bytes.add(_int32ToBytes(dataSize));
-
-    // Synthesize two-tone digital alarm pattern (A5 880Hz & C6 1046Hz)
-    for (int i = 0; i < totalSamples; i++) {
-      final t = i / sampleRate;
-      double sample = 0.0;
-
-      if ((t >= 0.0 && t < 0.18) || (t >= 0.26 && t < 0.44)) {
-        // High alert tone (880 Hz)
-        sample = sin(2 * pi * 880 * t) * 0.95;
-      } else if (t >= 0.52 && t < 0.80) {
-        // Higher accent alert tone (1046.5 Hz)
-        sample = sin(2 * pi * 1046.5 * t) * 0.98;
-      }
-
-      final intSample = (sample * 32767).toInt().clamp(-32768, 32767);
-      bytes.add(_int16ToBytes(intSample));
-    }
-
-    await file.writeAsBytes(bytes.toBytes());
-    return file;
-  }
-
-  static List<int> _int16ToBytes(int value) {
-    return [value & 0xff, (value >> 8) & 0xff];
-  }
-
-  static List<int> _int32ToBytes(int value) {
-    return [
-      value & 0xff,
-      (value >> 8) & 0xff,
-      (value >> 16) & 0xff,
-      (value >> 24) & 0xff,
-    ];
-  }
-}
-
 class AlarmService {
   final AppDatabase _db;
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -110,6 +35,9 @@ class AlarmService {
   bool _isBuzzerActive = false;
   bool _isAlarmScreenActive = false;
   String? _currentlyDisplayingSessionId;
+
+  // Track sessions whose alarm has been dismissed or acted upon to prevent duplicate triggers
+  final Set<String> _dismissedSessionIds = <String>{};
 
   bool get isBuzzerActive => _isBuzzerActive;
 
@@ -167,9 +95,6 @@ class AlarmService {
         await androidPlatform.createNotificationChannel(alarmChannel);
       }
 
-      // Pre-generate alarm sound file in background
-      AlarmSoundGenerator.getAlarmSoundFile();
-
       _isInitialized = true;
     } catch (e) {
       debugPrint('AlarmService initialization error: $e');
@@ -214,12 +139,14 @@ class AlarmService {
   int get pendingAlarmCount => _pendingAlarmQueue.length;
 
   Future<void> _tryShowAlarmScreen(String sessionId) async {
-    // If this session is already showing or already waiting in the queue, avoid duplicate entries
-    if (_currentlyDisplayingSessionId == sessionId || _pendingAlarmQueue.contains(sessionId)) {
+    // If dismissed, already showing, or already queued, do not re-trigger
+    if (_dismissedSessionIds.contains(sessionId) ||
+        _currentlyDisplayingSessionId == sessionId ||
+        _pendingAlarmQueue.contains(sessionId)) {
       return;
     }
 
-    // If an alarm screen is already open on screen, queue this session so it shows immediately when the current one is handled
+    // If an alarm screen is currently active on screen, queue this session
     if (_isAlarmScreenActive) {
       _pendingAlarmQueue.add(sessionId);
       debugPrint('Queued alarm screen for session $sessionId. Pending queue size: ${_pendingAlarmQueue.length}');
@@ -230,10 +157,23 @@ class AlarmService {
   }
 
   Future<void> _presentAlarmScreen(String sessionId) async {
+    if (_dismissedSessionIds.contains(sessionId)) {
+      _checkAndShowNextPendingAlarm();
+      return;
+    }
+
+    // Set currently displaying session immediately to lock against concurrent triggers
+    _currentlyDisplayingSessionId = sessionId;
+
     try {
       final repo = SessionRepository(_db);
       final active = await repo.getActiveSessionById(sessionId);
-      if (active == null || active.session.status == AppConstants.sessionCompleted) {
+      if (active == null ||
+          active.session.status == AppConstants.sessionCompleted ||
+          _dismissedSessionIds.contains(sessionId)) {
+        if (_currentlyDisplayingSessionId == sessionId) {
+          _currentlyDisplayingSessionId = null;
+        }
         _checkAndShowNextPendingAlarm();
         return;
       }
@@ -241,7 +181,6 @@ class AlarmService {
       final navState = rootNavigatorKey.currentState;
       if (navState != null && navState.mounted) {
         _isAlarmScreenActive = true;
-        _currentlyDisplayingSessionId = sessionId;
 
         navState.push(
           MaterialPageRoute(
@@ -256,11 +195,15 @@ class AlarmService {
           if (_currentlyDisplayingSessionId == sessionId) {
             _currentlyDisplayingSessionId = null;
           }
-          // When current alarm screen is resolved/dismissed, present the next pending expired room
+          // When current alarm screen is closed, present the next pending expired room
           _checkAndShowNextPendingAlarm();
         });
       } else {
-        if (!_pendingAlarmQueue.contains(sessionId)) {
+        _isAlarmScreenActive = false;
+        if (_currentlyDisplayingSessionId == sessionId) {
+          _currentlyDisplayingSessionId = null;
+        }
+        if (!_pendingAlarmQueue.contains(sessionId) && !_dismissedSessionIds.contains(sessionId)) {
           _pendingAlarmQueue.add(sessionId);
         }
       }
@@ -279,11 +222,67 @@ class AlarmService {
 
     while (_pendingAlarmQueue.isNotEmpty) {
       final nextSessionId = _pendingAlarmQueue.removeAt(0);
-      if (nextSessionId != _currentlyDisplayingSessionId) {
+      if (!_dismissedSessionIds.contains(nextSessionId) && nextSessionId != _currentlyDisplayingSessionId) {
         _presentAlarmScreen(nextSessionId);
         break;
       }
     }
+  }
+
+  /// Checks for any active sessions whose scheduled time has passed or native alarms currently ringing,
+  /// and presents the AlarmTriggerScreen immediately if the app is in foreground.
+  Future<void> checkAndPresentPendingAlarms() async {
+    if (!_isInitialized) return;
+    final navState = rootNavigatorKey.currentState;
+    if (navState == null || !navState.mounted) return;
+    if (_isAlarmScreenActive) return;
+
+    // 1. Check ringing alarms reported by native Alarm plugin
+    try {
+      final ringingAlarms = await Alarm.getAlarms();
+      for (final alarm in ringingAlarms) {
+        final isRinging = await Alarm.isRinging(alarm.id);
+        if (isRinging) {
+          final sId = alarm.payload;
+          if (sId != null &&
+              sId.isNotEmpty &&
+              !_dismissedSessionIds.contains(sId) &&
+              !_pendingAlarmQueue.contains(sId) &&
+              sId != _currentlyDisplayingSessionId) {
+            _pendingAlarmQueue.add(sId);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Notice checking native ringing alarms: $e');
+    }
+
+    // 2. Check active expired sessions in database
+    try {
+      final now = DateTime.now();
+      final uncompleted = await (_db.select(_db.sessions)
+            ..where((t) => t.status.isIn([
+                  AppConstants.sessionActive,
+                  AppConstants.sessionPaused,
+                  AppConstants.sessionOvertime,
+                ])))
+          .get();
+
+      for (final session in uncompleted) {
+        if (now.isAfter(session.scheduledEndAt) &&
+            session.billingPolicy != 'freeplay' &&
+            !_dismissedSessionIds.contains(session.id) &&
+            !_pendingAlarmQueue.contains(session.id) &&
+            session.id != _currentlyDisplayingSessionId) {
+          _pendingAlarmQueue.add(session.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('Notice checking database expired sessions: $e');
+    }
+
+    // 3. Present next pending alarm
+    _checkAndShowNextPendingAlarm();
   }
 
   // --- Persistent Settings Helpers ---
@@ -347,49 +346,14 @@ class AlarmService {
         );
   }
 
-  // --- Continuous Buzzer Fallback ---
-  Future<void> startContinuousBuzzer() async {
-    if (_isBuzzerActive) return;
-    _isBuzzerActive = true;
-
-    final soundOn = await isSoundEnabled();
-    final vibrationOn = await isVibrationEnabled();
-
-    // 1. Play looping alarm audio
-    if (soundOn) {
-      try {
-        final soundFile = await AlarmSoundGenerator.getAlarmSoundFile();
-        await _audioPlayer.stop();
-        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-        await _audioPlayer.setVolume(1.0);
-        await _audioPlayer.play(DeviceFileSource(soundFile.path));
-      } catch (e) {
-        debugPrint('AudioPlayer error: $e');
-      }
-    }
-
-    // 2. Play continuous repeating vibration pattern
-    if (vibrationOn) {
-      try {
-        final hasVib = await Vibration.hasVibrator();
-        if (hasVib == true) {
-          await Vibration.vibrate(
-            pattern: [0, 500, 250, 500, 250, 700, 300],
-            repeat: 0,
-          );
-        }
-      } catch (e) {
-        debugPrint('Vibration error: $e');
-      }
-    }
-  }
+  // --- Continuous Buzzer (Audio is managed strictly by native Alarm plugin) ---
+  Future<void> startContinuousBuzzer() async {}
 
   Future<void> stopContinuousBuzzer() async {
     _isBuzzerActive = false;
     try {
       await _audioPlayer.stop();
     } catch (_) {}
-
     try {
       await Vibration.cancel();
     } catch (_) {}
@@ -398,11 +362,10 @@ class AlarmService {
   // --- Testing Methods ---
   Future<void> testSound() async {
     try {
-      final soundFile = await AlarmSoundGenerator.getAlarmSoundFile();
       await _audioPlayer.stop();
       await _audioPlayer.setReleaseMode(ReleaseMode.release);
       await _audioPlayer.setVolume(1.0);
-      await _audioPlayer.play(DeviceFileSource(soundFile.path));
+      await _audioPlayer.play(AssetSource('audio/alarm.mp3'));
     } catch (e) {
       debugPrint('Test sound error: $e');
     }
@@ -460,6 +423,7 @@ class AlarmService {
     required String roomName,
     required DateTime scheduledEndAt,
   }) async {
+    _dismissedSessionIds.remove(sessionId);
     final now = DateTime.now();
     final soundOn = await isSoundEnabled();
     final vibrationOn = await isVibrationEnabled();
@@ -548,6 +512,7 @@ class AlarmService {
   Future<void> stopActiveAlarm([String? sessionId]) async {
     _isAlarmScreenActive = false;
     if (sessionId != null) {
+      _dismissedSessionIds.add(sessionId);
       if (_currentlyDisplayingSessionId == sessionId) {
         _currentlyDisplayingSessionId = null;
       }

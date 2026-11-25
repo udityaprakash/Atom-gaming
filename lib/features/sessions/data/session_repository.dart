@@ -965,15 +965,40 @@ class SessionRepository {
       final session = await (_db.select(_db.sessions)..where((t) => t.id.equals(sessionId))).getSingleOrNull();
       if (session == null) throw Exception('Session not found: $sessionId');
 
-      // Idempotency Guard: If session is already completed, exit cleanly to prevent duplicate payments
-      if (session.status == AppConstants.sessionCompleted) {
-        return;
-      }
-
       // 2. Fetch Customer
       final customer = session.customerId != null
           ? await (_db.select(_db.customers)..where((t) => t.id.equals(session.customerId!))).getSingleOrNull()
           : null;
+
+      // Idempotency Guard: If session is already completed, exit cleanly to prevent duplicate payments
+      if (session.status == AppConstants.sessionCompleted) {
+        final existingPayment = await (_db.select(_db.payments)
+              ..where((t) => t.sessionId.equals(sessionId))
+              ..limit(1))
+            .getSingleOrNull();
+
+        receiptData = SessionReceiptData(
+          sessionId: sessionId,
+          customerName: customer?.name,
+          customerPhone: customer?.phone,
+          gameTitle: null,
+          controllerCount: session.controllerCount,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt ?? now,
+          totalDuration: Duration(seconds: session.totalDurationSeconds),
+          segments: const [],
+          extensionCount: 0,
+          totalExtensionMinutes: 0,
+          grossAmount: session.totalAmount,
+          discount: 0.0,
+          finalAmount: existingPayment?.amountDue ?? session.totalAmount,
+          paymentStatus: existingPayment?.paymentStatus ?? session.paymentStatus,
+          paymentMethod: AppConstants.methodCash,
+          paidAt: existingPayment?.paidAt,
+          notes: notes,
+        );
+        return;
+      }
 
       // 3. Fetch all segments
       final segments = await (_db.select(_db.sessionSegments)

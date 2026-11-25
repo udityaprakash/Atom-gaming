@@ -1,28 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/alarm_service.dart';
 import '../../../core/theme/app_colors.dart';
 
-class AppScaffold extends StatelessWidget {
+class AppScaffold extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
   const AppScaffold({super.key, required this.navigationShell});
 
   @override
+  ConsumerState<AppScaffold> createState() => _AppScaffoldState();
+}
+
+class _AppScaffoldState extends ConsumerState<AppScaffold>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(alarmServiceProvider).checkAndPresentPendingAlarms();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.read(alarmServiceProvider).checkAndPresentPendingAlarms();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
+      body: widget.navigationShell,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.cardBorder, width: 1)),
         ),
         child: BottomNavigationBar(
-          currentIndex: navigationShell.currentIndex,
+          currentIndex: widget.navigationShell.currentIndex,
           onTap: (index) {
-            navigationShell.goBranch(
+            widget.navigationShell.goBranch(
               index,
-              initialLocation: index == navigationShell.currentIndex,
+              initialLocation: index == widget.navigationShell.currentIndex,
             );
           },
           backgroundColor: AppColors.surface,

@@ -41,11 +41,6 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
     );
-
-    // Start audio & haptic buzzer
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(alarmServiceProvider).startContinuousBuzzer();
-    });
   }
 
   @override
