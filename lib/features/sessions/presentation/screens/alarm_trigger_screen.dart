@@ -29,10 +29,13 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _pulseAnimation;
+  int _pendingCount = 0;
+  StreamSubscription<String>? _alarmSub;
 
   @override
   void initState() {
     super.initState();
+    _pendingCount = widget.pendingQueueCount;
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -41,19 +44,28 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.15).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
     );
+
+    _alarmSub = ref.read(alarmServiceProvider).onAlarmTriggered.listen((_) {
+      if (mounted) {
+        setState(() {
+          _pendingCount = ref.read(alarmServiceProvider).pendingAlarmCount;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _alarmSub?.cancel();
     _animController.dispose();
-    // Stop native alarm and continuous buzzing whenever this screen is exited
+    // Stop native alarm whenever this screen is exited
     ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
     super.dispose();
   }
 
   void _stopAndDismiss() {
-    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
-    Navigator.of(context, rootNavigator: true).pop();
+    ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id, true);
+    Navigator.of(context).pop();
   }
 
   Future<void> _handleFreeStyle() async {
@@ -63,7 +75,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
     await repo.enableFreeplay(widget.activeSession.session.id);
 
     if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -76,27 +88,32 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
     }
   }
 
-  void _handleExtend() {
+  Future<void> _handleExtend() async {
     ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
-    Navigator.of(context, rootNavigator: true).pop();
-
-    showModalBottomSheet(
+    final extended = await showModalBottomSheet<bool?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ExtendSessionSheet(activeSession: widget.activeSession),
     );
+    if (extended == true && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
-  void _handleEndSession() {
+  Future<void> _handleEndSession() async {
     ref.read(alarmServiceProvider).stopActiveAlarm(widget.activeSession.session.id);
-    Navigator.of(context, rootNavigator: true).pop();
-
-    showDialog(
+    final receipt = await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => EndSessionDialog(activeSession: widget.activeSession),
+      builder: (_) => EndSessionDialog(
+        activeSession: widget.activeSession,
+        showReceipt: false,
+      ),
     );
+    if (receipt != null && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -148,7 +165,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
                         ],
                       ),
                     ),
-                    if (widget.pendingQueueCount > 0) ...[
+                    if (_pendingCount > 0) ...[
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -163,7 +180,7 @@ class _AlarmTriggerScreenState extends ConsumerState<AlarmTriggerScreen>
                             const Icon(Icons.queue, color: AppColors.endingSoon, size: 14),
                             const SizedBox(width: 6),
                             Text(
-                              '${widget.pendingQueueCount} MORE ROOM(S) EXPIRED',
+                              '$_pendingCount MORE ROOM(S) EXPIRED',
                               style: GoogleFonts.rajdhani(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,

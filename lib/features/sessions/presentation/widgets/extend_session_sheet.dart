@@ -293,7 +293,7 @@ class _ExtendSessionSheetState extends ConsumerState<ExtendSessionSheet> {
       );
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

@@ -35,6 +35,16 @@ class AlarmService {
   bool _isBuzzerActive = false;
   bool _isAlarmScreenActive = false;
   String? _currentlyDisplayingSessionId;
+  int? _activeAudioAlarmId;
+
+  Future<bool> isRingingActive() async {
+    if (_activeAudioAlarmId == null) return false;
+    try {
+      return await Alarm.isRinging(_activeAudioAlarmId!);
+    } catch (_) {
+      return false;
+    }
+  }
 
   // Track sessions whose alarm has been dismissed or acted upon to prevent duplicate triggers
   final Set<String> _dismissedSessionIds = <String>{};
@@ -61,6 +71,20 @@ class AlarmService {
             debugPrint('Native Alarm ringing for ID: ${alarmSettings.id}, payload: ${alarmSettings.payload}');
             final sessionId = alarmSettings.payload;
             if (sessionId != null && sessionId.isNotEmpty) {
+              final alarmId = alarmSettings.id;
+              final isAlreadyRinging = await isRingingActive();
+
+              if (isAlreadyRinging && _activeAudioAlarmId != alarmId) {
+                // An alarm sound is ALREADY ringing! Loosely decouple:
+                // Stop this second alarm's audio immediately in native Android to prevent overlapping sound.
+                try {
+                  await Alarm.stop(alarmId);
+                } catch (_) {}
+                debugPrint('Suppressed duplicate audio for alarm $alarmId (Session $sessionId). Audio from $_activeAudioAlarmId is already playing.');
+              } else if (!isAlreadyRinging) {
+                _activeAudioAlarmId = alarmId;
+              }
+
               _alarmTriggerStreamController.add(sessionId);
               await _handleSessionAlarmTrigger(sessionId);
             }
@@ -148,7 +172,10 @@ class AlarmService {
 
     // If an alarm screen is currently active on screen, queue this session
     if (_isAlarmScreenActive) {
-      _pendingAlarmQueue.add(sessionId);
+      if (!_pendingAlarmQueue.contains(sessionId)) {
+        _pendingAlarmQueue.add(sessionId);
+      }
+      _alarmTriggerStreamController.add(sessionId);
       debugPrint('Queued alarm screen for session $sessionId. Pending queue size: ${_pendingAlarmQueue.length}');
       return;
     }
@@ -196,7 +223,9 @@ class AlarmService {
             _currentlyDisplayingSessionId = null;
           }
           // When current alarm screen is closed, present the next pending expired room
-          _checkAndShowNextPendingAlarm();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkAndShowNextPendingAlarm();
+          });
         });
       } else {
         _isAlarmScreenActive = false;
@@ -213,7 +242,9 @@ class AlarmService {
         _currentlyDisplayingSessionId = null;
       }
       debugPrint('Error showing alarm screen: $e');
-      _checkAndShowNextPendingAlarm();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndShowNextPendingAlarm();
+      });
     }
   }
 
@@ -224,18 +255,22 @@ class AlarmService {
       final nextSessionId = _pendingAlarmQueue.removeAt(0);
       if (!_dismissedSessionIds.contains(nextSessionId) && nextSessionId != _currentlyDisplayingSessionId) {
         _presentAlarmScreen(nextSessionId);
-        break;
+        return;
       }
     }
   }
 
+  bool _isCheckingPending = false;
+
   /// Checks for any active sessions whose scheduled time has passed or native alarms currently ringing,
   /// and presents the AlarmTriggerScreen immediately if the app is in foreground.
   Future<void> checkAndPresentPendingAlarms() async {
-    if (!_isInitialized) return;
+    if (!_isInitialized || _isCheckingPending) return;
     final navState = rootNavigatorKey.currentState;
     if (navState == null || !navState.mounted) return;
     if (_isAlarmScreenActive) return;
+
+    _isCheckingPending = true;
 
     // 1. Check ringing alarms reported by native Alarm plugin
     try {
@@ -250,6 +285,15 @@ class AlarmService {
               !_pendingAlarmQueue.contains(sId) &&
               sId != _currentlyDisplayingSessionId) {
             _pendingAlarmQueue.add(sId);
+          }
+
+          // Ensure single active audio source: keep only the first, silence duplicate audio
+          if (_activeAudioAlarmId == null) {
+            _activeAudioAlarmId = alarm.id;
+          } else if (_activeAudioAlarmId != alarm.id) {
+            try {
+              await Alarm.stop(alarm.id);
+            } catch (_) {}
           }
         }
       }
@@ -279,6 +323,8 @@ class AlarmService {
       }
     } catch (e) {
       debugPrint('Notice checking database expired sessions: $e');
+    } finally {
+      _isCheckingPending = false;
     }
 
     // 3. Present next pending alarm
@@ -395,6 +441,7 @@ class AlarmService {
         vibrate: vibrationOn,
         warningNotificationOnKill: false,
         androidFullScreenIntent: true,
+        allowAlarmOverlap: true,
         volumeSettings: VolumeSettings.fixed(
           volume: soundOn ? 1.0 : 0.0,
           volumeEnforced: true,
@@ -443,6 +490,7 @@ class AlarmService {
         vibrate: vibrationOn,
         warningNotificationOnKill: false,
         androidFullScreenIntent: true,
+        allowAlarmOverlap: true,
         volumeSettings: VolumeSettings.fixed(
           volume: soundOn ? 1.0 : 0.0,
           volumeEnforced: true,
@@ -482,6 +530,7 @@ class AlarmService {
         vibrate: vibrationOn,
         warningNotificationOnKill: false,
         androidFullScreenIntent: true,
+        allowAlarmOverlap: true,
         volumeSettings: VolumeSettings.fixed(
           volume: soundOn ? 1.0 : 0.0,
           volumeEnforced: true,
@@ -509,29 +558,27 @@ class AlarmService {
     }
   }
 
-  Future<void> stopActiveAlarm([String? sessionId]) async {
-    _isAlarmScreenActive = false;
+  Future<void> stopActiveAlarm([String? sessionId, bool silenceSound = false]) async {
     if (sessionId != null) {
       _dismissedSessionIds.add(sessionId);
-      if (_currentlyDisplayingSessionId == sessionId) {
-        _currentlyDisplayingSessionId = null;
-      }
       _pendingAlarmQueue.remove(sessionId);
     } else {
+      _isAlarmScreenActive = false;
       _currentlyDisplayingSessionId = null;
       _pendingAlarmQueue.clear();
     }
-    try {
-      if (sessionId != null) {
-        final alarmId = _sessionIdToAlarmId(sessionId);
-        await Alarm.stop(alarmId);
-      } else {
-        await Alarm.stopAll();
-      }
-    } catch (e) {
-      debugPrint('Error stopping active alarm: $e');
-    }
 
-    await stopContinuousBuzzer();
+    // Loosely coupled sound control:
+    // If user explicitly asked to silence sound, or if all queued/pending alarms are clear, stop all ringing.
+    final hasPending = _pendingAlarmQueue.isNotEmpty;
+    if (silenceSound || !hasPending) {
+      _activeAudioAlarmId = null;
+      try {
+        await Alarm.stopAll();
+      } catch (e) {
+        debugPrint('Error stopping native alarms on dismiss: $e');
+      }
+      await stopContinuousBuzzer();
+    }
   }
 }

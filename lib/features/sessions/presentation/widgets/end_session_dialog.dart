@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/services/billing_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -13,8 +14,13 @@ import '../../providers/session_provider.dart';
 
 class EndSessionDialog extends ConsumerStatefulWidget {
   final ActiveRoomSession activeSession;
+  final bool showReceipt;
 
-  const EndSessionDialog({super.key, required this.activeSession});
+  const EndSessionDialog({
+    super.key,
+    required this.activeSession,
+    this.showReceipt = true,
+  });
 
   @override
   ConsumerState<EndSessionDialog> createState() => _EndSessionDialogState();
@@ -470,25 +476,29 @@ class _EndSessionDialogState extends ConsumerState<EndSessionDialog> {
       );
 
       if (mounted) {
-        Navigator.pop(context); // Close settlement dialog
+        Navigator.pop(context, receiptData); // Close settlement dialog and return receipt
 
-        // Show Digital Receipt Dialog right away
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => ReceiptDialog(receiptData: receiptData),
-        );
+        final rootContext = rootNavigatorKey.currentContext;
+        if (widget.showReceipt && rootContext != null && rootContext.mounted) {
+          showDialog(
+            context: rootContext,
+            barrierDismissible: false,
+            builder: (_) => ReceiptDialog(receiptData: receiptData),
+          );
+        }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Session completed for ${widget.activeSession.room.roomName}! Marked as $paymentStatus.',
+        if (rootContext != null && rootContext.mounted) {
+          ScaffoldMessenger.of(rootContext).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Session completed for ${widget.activeSession.room.roomName}! Marked as $paymentStatus.',
+              ),
+              backgroundColor: paymentStatus == AppConstants.paymentPaid
+                  ? AppColors.surfaceElevated
+                  : AppColors.occupied,
             ),
-            backgroundColor: paymentStatus == AppConstants.paymentPaid
-                ? AppColors.surfaceElevated
-                : AppColors.occupied,
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
